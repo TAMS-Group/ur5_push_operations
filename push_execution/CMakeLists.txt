@@ -11,7 +11,12 @@ find_package(catkin REQUIRED COMPONENTS
 	std_msgs
 	moveit_ros_planning_interface
 	moveit_core
-	moveit_msgs)
+	moveit_msgs
+	geometry_msgs
+	tf_conversions
+	tf)
+
+catkin_package()
 
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
@@ -22,3 +27,7 @@ include_directories(
 
 ## Declare a C++ library
 add_library(${PROJECT_NAME} src/pusher.cpp)
+
+add_executable(push_bringup src/push_bringup.cpp)
+target_link_libraries(push_bringup ${catkin_LIBRARIES})
+#add_dependencies(push_bringup ${${PROJECT_NAME}_EXPORTED_TARGETS})
