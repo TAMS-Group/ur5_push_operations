@@ -1,0 +1,81 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro"
+       name="arm" > 
+  <xacro:property name="pi" value="3.1415926535897931" />
+
+  <!-- include macro definitions -->
+  <xacro:include filename="$(find tams_ur5_description)/urdf/ur5.urdf.xacro" />
+  <xacro:include filename="$(find robotiq_s_model_visualization)/cfg/s-model_articulated_macro.xacro" />
+  <xacro:include filename="$(find robotiq_force_torque_sensor)/urdf/robotiq_fts150.urdf.xacro" />
+  <xacro:include filename="$(find tams_ur5_description)/urdf/ft_adapter.urdf.xacro" />
+  <xacro:include filename="$(find tams_ur5_description)/urdf/s_model_adapter.urdf.xacro" />
+  <xacro:include filename="$(find tams_ur5_description)/urdf/plug_collision_model.urdf.xacro" />
+
+  <!-- arm -->
+  <!-- xamla_cap is a custom parameter in TAMS' fork of the universal_robot repository,
+       remove it if you want to use the upstream ur5 description instead -->
+  <xacro:ur5_robot prefix="ur5_" joint_limited="false" xamla_cap="true"/>
+
+  <!-- ft_adapter -->
+  <xacro:ft_adapter name="ft_adapter" parent="ur5_ee_link">
+    <origin xyz="0.0045 0.0 0.0" rpy="0.0 ${pi/2} 0.0" />
+  </xacro:ft_adapter>
+
+  <!-- ft150 -->
+  <xacro:robotiq_fts150 prefix="ft_" parent="ur5_ee_link">
+    <origin xyz="0.009 0.0 0.0" rpy="0.0 ${-pi/2} ${pi}" />
+  </xacro:robotiq_fts150>
+
+  <!-- tool0 frame -->
+  <link name="tool0" />
+  <joint name="ft_fts_toolside_tool0" type="fixed">
+    <parent link="ft_fts_toolside"/>
+    <child link="tool0"/>
+    <origin xyz="0.0 0.0 0.0205" rpy="0.0 ${-pi/2} 0.0"/>
+  </joint>
+
+  <!-- s_model_adapter -->
+  <xacro:s_model_adapter name="s_model_adapter" parent="ft_fts_toolside">
+    <origin xyz="0.0 0.0 0.015" rpy="0.0 0.0 0.0" />
+  </xacro:s_model_adapter>
+
+  <!-- the adaptive gripper -->
+  <xacro:s-model_articulated prefix="s_model_"/>
+  <joint name="gripper_joint" type="fixed">
+    <parent link="tool0" />
+    <child link = "s_model_palm" />
+    <origin xyz="0.057 0.0 0.0" rpy="0.0 ${pi} ${-pi/2}" />
+  </joint>
+
+  <!-- plug collision model -->
+  <xacro:plug_collision_model name="plug_collision_model" parent="ur5_ee_link" >
+    <origin xyz="0.0 0.0 0.0" rpy="0.0 0.0 0.0" />
+  </xacro:plug_collision_model>
+
+  <!-- pusher attachment -->
+  <link name="pusher">
+	  <visual>
+		  <geometry>
+			  <mesh filename="package://ur5_push_setup/meshes/visual/pusher_1_binary.stl" scale="0.001 0.001 0.001"/>
+		  </geometry>
+		  <material name="gray"/>
+	  </visual>
+	  <collision>
+		  <geometry>
+			  <mesh filename="package://ur5_push_setup/meshes/collision/pusher_1_binary.stl" scale="0.001 0.001 0.001"/>
+		  </geometry>
+	  </collision>
+  </link>
+
+  <joint name="pusher_joint" type="fixed">
+	  <parent link="s_model_palm"/>
+	  <child link="pusher"/>
+	  <origin xyz="0.0 0.0305 0.0" rpy="0.0 0.0 0.0" />
+  </joint>
+  <link name="pusher0"/>
+  <joint name="pusher_joint_0" type="fixed">
+	  <parent link="pusher"/>
+	  <child link="pusher0"/>
+	  <origin xyz="0.0 0.17 0.0" rpy="0.0 0.0 0.0" />
+  </joint>
+</robot>
