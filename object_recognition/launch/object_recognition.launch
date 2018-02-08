@@ -1,11 +1,14 @@
 <?xml version="1.0"?>
 <launch>
-    <node pkg="object_recognition" type="object_recognition" name="object_recognition">
-        <!-- object description - these values should be replaced by generic or known values from a database -->
-        <param name="object_tag_id" value="15"/>
+
+    <arg name="demo_mode" default="true"/>
+
+    <node pkg="object_recognition" type="object_recognition" name="object_recognition" output="screen">
+        <rosparam command="load" file="$(find ur5_push_setup)/config/objects.yaml" />
+        <!-- demo mode activates a single fixed transform at <0,0,0> in the (table_top) frame -->
+        <param name="demo_mode" value="$(arg demo_mode)"/>
+        <param name="object_id" value="0"/>
         <!-- <param name="object_frame_id" value="/object_frame_id"/> -->
-        <!-- dummy mode activates a fixed transform at <0,0,0> in the (table_top) frame -->
-        <param name="dummy_mode" value="true"/>
         <!-- timeout is not used yet -->
         <!-- <param name="timeout" value="10"/> -->
     </node>
