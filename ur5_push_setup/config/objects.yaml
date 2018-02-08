@@ -1,0 +1,28 @@
+# Defenitions of training objects
+# object type is one of CUBE, SPHERE, CYLIINDER, MESH
+objects:
+  - object:
+      type: CUBE
+      scale:
+        x: 0.05
+        y: 0.1
+        z: 0.05
+  - object:
+      type: SPHERE
+      scale:
+        x: 0.1
+        y: 0.1
+        z: 0.1
+  - object:
+      type: CYLINDER
+      scale:
+        x: 0.1
+        y: 0.1
+        z: 0.1
+#  - object:
+#      type: MESH
+#      mesh: '<path_to_mesh>'
+#      scale:
+#        - x: 0.1
+#        - y: 0.1
+#        - z: 0.1
