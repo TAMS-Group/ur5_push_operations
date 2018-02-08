@@ -14,9 +14,21 @@ find_package(catkin REQUIRED COMPONENTS
 	moveit_msgs
 	geometry_msgs
 	tf_conversions
-	tf)
+	tf
+	message_generation)
 
-catkin_package()
+add_message_files(
+	FILES
+	PushApproach.msg
+	Push.msg
+)
+
+generate_messages(
+	DEPENDENCIES
+	geometry_msgs
+)
+
+catkin_package(CATKIN_DEPENDS message_runtime)
 
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
@@ -25,9 +37,14 @@ include_directories(
  ${catkin_INCLUDE_DIRS}
 )
 
+
 ## Declare a C++ library
-add_library(${PROJECT_NAME} src/pusher.cpp)
+add_executable(pusher src/pusher.cpp)
+target_link_libraries(pusher ${catkin_LIBRARIES})
+
 
 add_executable(push_bringup src/push_bringup.cpp)
 target_link_libraries(push_bringup ${catkin_LIBRARIES})
 #add_dependencies(push_bringup ${${PROJECT_NAME}_EXPORTED_TARGETS})
+
+
