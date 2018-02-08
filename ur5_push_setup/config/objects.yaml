@@ -3,26 +3,18 @@
 objects:
   - object:
       type: CUBE
-      scale:
-        x: 0.05
-        y: 0.1
-        z: 0.05
+      scale: {x: 0.05, y: 0.1, z: 0.05}
+      tags: [11, 12, 13]
   - object:
       type: SPHERE
-      scale:
-        x: 0.1
-        y: 0.1
-        z: 0.1
+      scale: {x: 0.1, y: 0.1, z: 0.1}
+      tags: [21, 22, 23]
   - object:
       type: CYLINDER
-      scale:
-        x: 0.1
-        y: 0.1
-        z: 0.1
+      scale: {x: 0.1, y: 0.1, z: 0.1}
+      tags: [31, 32, 33]
 #  - object:
 #      type: MESH
 #      mesh: '<path_to_mesh>'
-#      scale:
-#        - x: 0.1
-#        - y: 0.1
-#        - z: 0.1
+#      tags: [41, 42, 43]
+#      scale: {x: 0.1, y: 0.1, z: 0.1}
