@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<launch>
+    <node pkg="object_recognition" type="object_recognition" name="object_recognition">
+        <!-- object description - these values should be replaced by generic or known values from a database -->
+        <param name="object_tag_id" value="15"/>
+        <!-- <param name="object_frame_id" value="/object_frame_id"/> -->
+        <!-- dummy mode activates a fixed transform at <0,0,0> in the (table_top) frame -->
+        <param name="dummy_mode" value="true"/>
+        <!-- timeout is not used yet -->
+        <!-- <param name="timeout" value="10"/> -->
+    </node>
+</launch>
