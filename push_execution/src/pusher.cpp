@@ -21,6 +21,10 @@ std::mt19937 gen{rd()};
 
 std::string MARKER_TOPIC = "/pushable_objects";
 
+float MIN_TABLE_DISTANCE = 0.02;
+float WORKABLE_TIP_LENGTH = 0.08;
+
+
 namespace tams_ur5_push_execution
 {
     class Pusher
@@ -42,7 +46,7 @@ namespace tams_ur5_push_execution
 
             moveit_msgs::CollisionObject obj_;
 
-            visualization_msgs::Marker* marker_ = NULL;
+            visualization_msgs::Marker marker_;
 
         public:
             Pusher(moveit::planning_interface::MoveGroupInterface& group) : group_(group){
@@ -57,10 +61,11 @@ namespace tams_ur5_push_execution
 
                 marker_sub_ = nh_.subscribe(MARKER_TOPIC, 1, &Pusher::onDetectObjects, this);
                 contact_point_pub_ = nh_.advertise<visualization_msgs::Marker>("/push_approach", 0);
+                marker_.id = -1;
             };
 
             void performRandomPush() {
-                if(marker_ != NULL) {
+                if(!marker_.header.frame_id.empty()) {
                     // create push message
                     Push push;
                     createRandomPushMsg(push);
@@ -109,16 +114,16 @@ namespace tams_ur5_push_execution
 
             PushApproach sampleRandomPushApproach() {
                 PushApproach approach;
-                //approach.frame_id = marker_->header.frame_id;
-                approach.frame_id = "/pushable_object_0";
-
-                geometry_msgs::Pose approach_pose;
+                approach.frame_id = marker_.header.frame_id;
+                geometry_msgs::Pose approach_pose = 
+                    sampleRandomPointFromBox(marker_.scale.x, marker_.scale.y, marker_.scale.z);
                 sampleRandomContactPoint(approach_pose);
                 approach.point = approach_pose.position;
                 approach.normal = approach_pose.orientation;
                 approach.angle = sampleRandomPushAngle();
                 // visualize contact point with arrow marker
                 visualizePushApproach(approach.frame_id, approach_pose, approach.angle);
+
                 return approach;
             }
 
@@ -126,7 +131,6 @@ namespace tams_ur5_push_execution
                 visualization_msgs::Marker approach;
                 approach.type = visualization_msgs::Marker::ARROW;
                 approach.header.frame_id = frame_id;
-                //approach.header.frame_id = "/pushable_object_0";
                 approach.header.stamp = ros::Time();
                 approach.id = id;
                 approach.action = visualization_msgs::Marker::ADD;
@@ -216,10 +220,8 @@ namespace tams_ur5_push_execution
 
                     group_.setPoseReferenceFrame(push.approach.frame_id);
 
-                    ROS_INFO_STREAM("Planning push trajectory with start_pose:\n" << start_pose << "\ngoal_pose:\n" <<goal_pose);
+                    //ROS_INFO_STREAM("Planning push trajectory with start_pose:\n" << start_pose << "\ngoal_pose:\n" <<goal_pose);
 
-                    //Eigen::Affine3d object_frame = scene_->getFrameTransform(push.approach.frame_id);
-                    //state.setToIKSolverFrame(start_pose_affine, push.approach.frame_id);
                     geometry_msgs::PoseStamped ps;
                     ps.pose = start_pose;
                     ps.header.frame_id = push.approach.frame_id;
@@ -243,79 +245,43 @@ namespace tams_ur5_push_execution
             }
 
             /**
-             * Sample random contact point from marker
+             * Sample random contact point from box dimensions
              */
-            bool sampleRandomContactPoint(geometry_msgs::Pose& pose) {
-                // we expect a single BOX primitive for now
-                geometry_msgs::Point contact_point;
-                //Sample contact point from obj shape
-                if(marker_->type == visualization_msgs::Marker::CUBE) {
-                    double dim_x = marker_->scale.x;
-                    double dim_y = marker_->scale.y;
-
-                    double cube_len = 2 * (dim_x + dim_y);
-                    std::uniform_real_distribution<> dis(0.0, cube_len);
-                    double p = dis(gen);
-                    if(p <= dim_x) {
-                        pose.position.x = p;
-                        pose.position.y = 0;
-                        pose.orientation = tf::createQuaternionMsgFromYaw(0.5*M_PI);
-                    } else if (p <= dim_x + dim_y) {
-                        pose.position.x = dim_x;
-                        pose.position.y = p - dim_x;
-                        pose.orientation = tf::createQuaternionMsgFromYaw(M_PI);
-                    } else if (p <= 2 * dim_x + dim_y) {
-                        pose.position.x = 2 * dim_x + dim_y - p;
-                        pose.position.y = dim_y;
-                        pose.orientation = tf::createQuaternionMsgFromYaw(1.5*M_PI);
-                    } else {
-                        pose.position.x = 0;
-                        pose.position.y = 2 * (dim_x + dim_y) - p;
-                        pose.orientation = tf::createQuaternionMsgFromYaw(0.0);
-                    }
-                    // adjust to center
-                    pose.position.x -= 0.5*dim_x;
-                    pose.position.y -= 0.5*dim_y;
-                    //TODO: transform pose with marker pose offset
-                    return true;
+            geometry_msgs::Pose sampleRandomPointFromBox(double dim_x, double dim_y, double dim_z) {
+                geometry_msgs::Pose pose;
+                // Pick random value in range of perimeter
+                std::uniform_real_distribution<> dis(0.0, 2 * (dim_x + dim_y));
+                double p = dis(gen);
+                // Match value with edge and create corresponding pose
+                if(p <= dim_x) {
+                    pose.position.x = p;
+                    pose.position.y = 0;
+                    pose.orientation = tf::createQuaternionMsgFromYaw(0.5*M_PI);
+                } else if (p <= dim_x + dim_y) {
+                    pose.position.x = dim_x;
+                    pose.position.y = p - dim_x;
+                    pose.orientation = tf::createQuaternionMsgFromYaw(M_PI);
+                } else if (p <= 2 * dim_x + dim_y) {
+                    pose.position.x = 2 * dim_x + dim_y - p;
+                    pose.position.y = dim_y;
+                    pose.orientation = tf::createQuaternionMsgFromYaw(1.5*M_PI);
+                } else {
+                    pose.position.x = 0;
+                    pose.position.y = 2 * (dim_x + dim_y) - p;
+                    pose.orientation = tf::createQuaternionMsgFromYaw(0.0);
                 }
-                return false;
-            }
+                // adjust to center
+                pose.position.x -= 0.5*dim_x;
+                pose.position.y -= 0.5*dim_y;
 
-            bool sampleRandomContactPoint(moveit_msgs::CollisionObject& obj, geometry_msgs::Pose& pose) {
-                // we expect a single BOX primitive for now
-                geometry_msgs::Point contact_point;
-                //Sample contact point from obj shape
-                if(obj.primitives[0].type == shape_msgs::SolidPrimitive::BOX) {
-                    double dim_x = obj.primitives[0].dimensions[shape_msgs::SolidPrimitive::BOX_X];
-                    double dim_y = obj.primitives[0].dimensions[shape_msgs::SolidPrimitive::BOX_Y];
-                    pose.position.z = obj.primitives[0].dimensions[shape_msgs::SolidPrimitive::BOX_Z];
-                    double box_len = 2 * (dim_x + dim_y);
-                    std::uniform_real_distribution<> dis(0.0, box_len);
-                    double p = dis(gen);
-                    if(p < dim_x) {
-                        pose.position.x = p;
-                        pose.position.y = 0;
-                        pose.orientation.w = 1;
-                    } else if (p < dim_x + dim_y) {
-                        pose.position.x = dim_x;
-                        pose.position.y = p - dim_y;
-                        pose.orientation = tf::createQuaternionMsgFromYaw(0.5*M_PI);
-                    } else if (p < 2 * dim_x + dim_y) {
-                        pose.position.x = 2 * dim_x + dim_y - p;
-                        pose.position.y = dim_y;
-                        pose.orientation = tf::createQuaternionMsgFromYaw(M_PI);
-                    } else {
-                        pose.position.x = 0;
-                        pose.position.y = 2 * (dim_x + dim_y) - p;
-                        pose.orientation = tf::createQuaternionMsgFromYaw(1.5*M_PI);
-                    }
-                    // adjust to center
-                    pose.position.x -= 0.5*dim_x;
-                    pose.position.y -= 0.5*dim_y;
-                    return true;
-                }
-                return false;
+                // Pose height is related to box height and tip length
+                // By default the tip aligns with the frame of the box.
+                // The tip must be lifted in two mutually exclusive cases:
+                // 1. The box is too small and therefore the table distance too short.
+                pose.position.z = std::max(MIN_TABLE_DISTANCE - 0.5 * dim_z, 0.0);
+                // 2. The box is too high for the tip and might touch the gripper
+                pose.position.z = std::max(0.5 * dim_z - WORKABLE_TIP_LENGTH, pose.position.z);
+                return pose;
             }
 
             float sampleRandomPushAngle(int degrees=30) {
@@ -325,8 +291,8 @@ namespace tams_ur5_push_execution
             }
 
             void onDetectObjects(visualization_msgs::Marker marker) {
-                if(&marker != marker_ && createCollisionObject(marker)) {
-                    marker_ = &marker;
+                if(marker_.id != marker.id && createCollisionObject(marker)) {
+                    marker_ = marker;
                 }
             }
 
@@ -336,7 +302,6 @@ namespace tams_ur5_push_execution
                     obj_.header.frame_id = marker.header.frame_id;
                     obj_.primitive_poses.resize(1);
                     obj_.primitive_poses[0].orientation.w = 1;
-                    //obj_.primitive_poses[0].position.z = 0.0;
                     obj_.primitives.resize(1);
                     obj_.primitives[0].type = shape_msgs::SolidPrimitive::BOX;
                     obj_.primitives[0].dimensions.resize(3);
