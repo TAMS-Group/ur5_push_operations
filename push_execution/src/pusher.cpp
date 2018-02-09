@@ -40,19 +40,20 @@ namespace tams_ur5_push_execution
 
             tf::TransformListener tf_listener_;
 
-            moveit_msgs::CollisionObject& obj_;
+            moveit_msgs::CollisionObject obj_;
 
             visualization_msgs::Marker* marker_ = NULL;
 
         public:
-            Pusher(moveit::planning_interface::MoveGroupInterface& group,
-                    moveit_msgs::CollisionObject& obj) : obj_(obj), group_(group){
+            Pusher(moveit::planning_interface::MoveGroupInterface& group) : group_(group){
 
                 nh_ = (*new ros::NodeHandle());
                 pnh_ = (*new ros::NodeHandle("~"));
                 psi_ = (*new moveit::planning_interface::PlanningSceneInterface());
                 scene_ = std::make_shared<planning_scene::PlanningScene>(group_.getRobotModel());
 
+                group_.setPlanningTime(5.0);
+                group_.setPlannerId("RRTConnectkConfigDefault");
 
                 marker_sub_ = nh_.subscribe(MARKER_TOPIC, 1, &Pusher::onDetectObjects, this);
                 contact_point_pub_ = nh_.advertise<visualization_msgs::Marker>("/push_approach", 0);
@@ -64,18 +65,34 @@ namespace tams_ur5_push_execution
                     Push push;
                     createRandomPushMsg(push);
 
+                    //remove collision object in case the last attempt failed
+                    std::vector<std::string> object_ids;
+                    object_ids.push_back(obj_.id);
+                    psi_.removeCollisionObjects(object_ids);
+
                     // declare plan and start state
                     moveit::planning_interface::MoveGroupInterface::Plan push_plan;
                     robot_state::RobotState start_state(*group_.getCurrentState());
+
                     //compute push and retreat trajectory together with start state
                     if(computeCartesianPushTraj(push, push_plan.trajectory_, start_state)) {
 
-                        // move to pre push pose
+                        // apply collision object before moving to pre_push
+                        psi_.applyCollisionObject(obj_);
+
+                        // move to pre_push pose
                         group_.setJointValueTarget(start_state);
                         group_.move();
 
+                        // remove collision object before push and for next plan
+                        psi_.removeCollisionObjects(object_ids);
+
                         // push object and retreat
                         group_.execute(push_plan);
+
+                        // add collision object after run
+                        psi_.applyCollisionObject(obj_);
+
                     } else {
                         ROS_INFO_STREAM("Failed to plan and execute push trajectory!");
                     }
@@ -265,8 +282,6 @@ namespace tams_ur5_push_execution
                 return false;
             }
 
-
-
             bool sampleRandomContactPoint(moveit_msgs::CollisionObject& obj, geometry_msgs::Pose& pose) {
                 // we expect a single BOX primitive for now
                 geometry_msgs::Point contact_point;
@@ -310,39 +325,38 @@ namespace tams_ur5_push_execution
             }
 
             void onDetectObjects(visualization_msgs::Marker marker) {
-                marker_ = &marker;
+                if(&marker != marker_ && createCollisionObject(marker)) {
+                    marker_ = &marker;
+                }
+            }
+
+            bool createCollisionObject(visualization_msgs::Marker& marker) {
+                if(marker.type == visualization_msgs::Marker::CUBE) {
+                    obj_.id = marker.header.frame_id + "_collision";
+                    obj_.header.frame_id = marker.header.frame_id;
+                    obj_.primitive_poses.resize(1);
+                    obj_.primitive_poses[0].orientation.w = 1;
+                    //obj_.primitive_poses[0].position.z = 0.0;
+                    obj_.primitives.resize(1);
+                    obj_.primitives[0].type = shape_msgs::SolidPrimitive::BOX;
+                    obj_.primitives[0].dimensions.resize(3);
+                    obj_.primitives[0].dimensions[shape_msgs::SolidPrimitive::BOX_X] = marker.scale.x;
+                    obj_.primitives[0].dimensions[shape_msgs::SolidPrimitive::BOX_Y] = marker.scale.y;
+                    obj_.primitives[0].dimensions[shape_msgs::SolidPrimitive::BOX_Z] = marker.scale.z;
+                    return true;
+                }
+                return false;
             }
     };
-}
-
-moveit_msgs::CollisionObject spawnObject(moveit::planning_interface::PlanningSceneInterface& psi, const std::string& obj_id, double x_dim, double y_dim, double z_dim, double x_pos=0.0, double y_pos=0.0){
-    moveit_msgs::CollisionObject obj;
-    obj.id = obj_id;
-    obj.header.frame_id = "table_top";
-    obj.primitive_poses.resize(1);
-    obj.primitive_poses[0].position.x = x_pos;
-    obj.primitive_poses[0].position.y = y_pos;
-    obj.primitive_poses[0].position.z = 0.5 * z_dim;
-    obj.primitive_poses[0].orientation.w = 1;
-    obj.primitives.resize(1);
-    obj.primitives[0].type = shape_msgs::SolidPrimitive::BOX;
-    obj.primitives[0].dimensions.resize(3);
-    obj.primitives[0].dimensions[shape_msgs::SolidPrimitive::BOX_X] = x_dim;
-    obj.primitives[0].dimensions[shape_msgs::SolidPrimitive::BOX_Y] = y_dim;
-    obj.primitives[0].dimensions[shape_msgs::SolidPrimitive::BOX_Z] = z_dim;
-    //psi.applyCollisionObject(obj);
-    return obj;
 }
 
 int main(int argc, char** argv) {
     ros::init(argc, argv, "push_execution_node");
     ros::AsyncSpinner spinner(4);
     spinner.start();
-    moveit::planning_interface::PlanningSceneInterface psi;
-    moveit_msgs::CollisionObject box = spawnObject(psi, "box", 0.05, 0.1, 0.05); 
     moveit::planning_interface::MoveGroupInterface arm("arm");
 
-    tams_ur5_push_execution::Pusher pusher(arm, box);
+    tams_ur5_push_execution::Pusher pusher(arm);
     while(ros::ok()) {
         pusher.performRandomPush();
         ros::Duration(3).sleep();
