@@ -24,6 +24,10 @@ std::string MARKER_TOPIC = "/pushable_objects";
 float MIN_TABLE_DISTANCE = 0.02;
 float WORKABLE_TIP_LENGTH = 0.08;
 
+// Range to restrict the object on the table
+float SAFETY_RANGE = 0.25; // Outside of this range the object is pushed towards the center
+float EMERGENCY_RANGE = 0.35; // Outside of this range the experiment is aborted
+
 
 namespace tams_ur5_push_execution
 {
@@ -115,12 +119,19 @@ namespace tams_ur5_push_execution
             PushApproach sampleRandomPushApproach() {
                 PushApproach approach;
                 approach.frame_id = marker_.header.frame_id;
-                geometry_msgs::Pose approach_pose = 
-                    sampleRandomPointFromBox(marker_.scale.x, marker_.scale.y, marker_.scale.z);
-                sampleRandomContactPoint(approach_pose);
+
+                geometry_msgs::Pose approach_pose;
+                double angle = 0.0;
+                sampleApproachPoseAndAngle(marker_, approach_pose, angle);
+                approach.angle = angle;
+
+                //geometry_msgs::Pose approach_pose = 
+                //    sampleRandomPointFromBox(marker_.scale.x, marker_.scale.y, marker_.scale.z);
+                //approach.angle = sampleRandomPushAngle();
+
                 approach.point = approach_pose.position;
                 approach.normal = approach_pose.orientation;
-                approach.angle = sampleRandomPushAngle();
+
                 // visualize contact point with arrow marker
                 visualizePushApproach(approach.frame_id, approach_pose, approach.angle);
 
@@ -244,6 +255,41 @@ namespace tams_ur5_push_execution
                 return false;
             }
 
+            bool sampleApproachPoseAndAngle(visualization_msgs::Marker& marker, geometry_msgs::Pose& pose, double& angle, int attempts=20) {
+                float distance = std::sqrt(std::pow(marker.pose.position.x,2) + std::pow(marker.pose.position.z,2));
+                if(distance < SAFETY_RANGE) {
+                    pose = sampleRandomPointFromBox(marker_.scale.x, marker_.scale.y, marker_.scale.z);
+                    angle = sampleRandomPushAngle();
+                    return true;
+                }
+                if(distance < EMERGENCY_RANGE) {
+                    tf::Vector3 table_vec;
+                    tf::pointMsgToTF(marker.pose.position, table_vec);
+                    table_vec = -table_vec;
+
+                    tf::Quaternion obj_orientation;
+                    tf::Quaternion push_normal;
+                    tf::Quaternion push_direction;
+                    push_direction.setRPY(0.0, 0.0, angle);
+                    tf::quaternionMsgToTF(marker.pose.orientation, obj_orientation);
+                    tf::Vector3 push_vec(1,0,0);
+
+                    for(int i = 0; i < attempts; i++) {
+                        pose = sampleRandomPointFromBox(marker_.scale.x, marker_.scale.y, marker_.scale.z);
+                        angle = sampleRandomPushAngle();
+                        tf::quaternionMsgToTF(pose.orientation, push_normal);
+                        push_vec = tf::quatRotate(obj_orientation * push_normal * push_direction, push_vec);
+                        if(table_vec.angle(push_vec) < (5.0 / 180.0 * M_PI)) {
+                            return true;
+                        }
+                    }
+                    ROS_ERROR_STREAM("Push experiment aborted! Could not sample valid push pose in " << attempts << " attempts!");
+                }  else {
+                    ROS_ERROR_STREAM("Push experiment aborted! Object is outside of safety range.");
+                }
+                return false;
+            }
+
             /**
              * Sample random contact point from box dimensions
              */
@@ -291,6 +337,7 @@ namespace tams_ur5_push_execution
             }
 
             void onDetectObjects(visualization_msgs::Marker marker) {
+                marker.position.x = 0.3;
                 if(marker_.id != marker.id && createCollisionObject(marker)) {
                     marker_ = marker;
                 }
