@@ -1,3 +1,5 @@
+#include <algorithm>
+
 #include <ros/ros.h>
 
 #include <moveit/move_group_interface/move_group_interface.h>
@@ -301,9 +303,10 @@ namespace tams_ur5_push_execution
                 return false;
             }
 
-            float sampleRandomPushAngle() {
+            float sampleRandomPushAngle(int degrees=30) {
+                float range = M_PI * degrees / 180.0;
                 std::normal_distribution<> d{0,0.5};
-                return d(gen);
+                return std::max(-range, std::min(range, (float)d(gen)));
             }
 
             void onDetectObjects(visualization_msgs::Marker marker) {
