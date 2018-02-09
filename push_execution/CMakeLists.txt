@@ -8,15 +8,16 @@ add_compile_options(-std=c++11)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
 	roscpp
-	std_msgs
-	moveit_ros_planning_interface
-	moveit_core
-	moveit_msgs
 	geometry_msgs
-	eigen_conversions
+	std_msgs
 	visualization_msgs
-	tf_conversions
+	moveit_msgs
+	moveit_core
+	moveit_ros_planning
+	moveit_ros_planning_interface
 	tf
+	tf_conversions
+	eigen_conversions
 	message_generation)
 
 add_message_files(
