@@ -13,6 +13,8 @@ find_package(catkin REQUIRED COMPONENTS
 	moveit_core
 	moveit_msgs
 	geometry_msgs
+	eigen_conversions
+	visualization_msgs
 	tf_conversions
 	tf
 	message_generation)

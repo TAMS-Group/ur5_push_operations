@@ -4,16 +4,32 @@
 #include <moveit/planning_scene_interface/planning_scene_interface.h>
 #include <moveit_msgs/CollisionObject.h>
 
+#include <eigen_conversions/eigen_msg.h>
+
+#include <visualization_msgs/Marker.h>
+
 #include <tams_ur5_push_execution/Push.h>
 #include <tams_ur5_push_execution/PushApproach.h>
 
 std::random_device rd;
 std::mt19937 gen{rd()};
 
+std::string MARKER_TOPIC = "/pushable_objects";
+
 namespace tams_ur5_push_execution
 {
 	class Pusher
 	{
+		private:
+
+			ros::NodeHandle nh_;
+			ros::NodeHandle pnh_;
+
+			ros::Subscriber marker_sub_;
+			ros::Publisher contact_point_pub_;
+
+			visualization_msgs::Marker* marker_ = NULL;
+
 		public:
 
 			moveit_msgs::CollisionObject& obj_;
@@ -21,96 +37,133 @@ namespace tams_ur5_push_execution
 			moveit::planning_interface::MoveGroupInterface& group_;
 
 			Pusher(moveit::planning_interface::MoveGroupInterface& group,
-					moveit_msgs::CollisionObject& obj) : obj_(obj), group_(group){};
+					moveit_msgs::CollisionObject& obj) : obj_(obj), group_(group){
 
-			void setTargetObject(moveit_msgs::CollisionObject& obj) {
-				obj_ = obj;
-			}
+				nh_ = (*new ros::NodeHandle());
+				pnh_ = (*new ros::NodeHandle("~"));
+
+				marker_sub_ = nh_.subscribe(MARKER_TOPIC, 1, &Pusher::onDetectObjects, this);
+				contact_point_pub_ = nh_.advertise<visualization_msgs::Marker>("/push_approach", 0);
+			};
 
 			void performRandomPush() {
-				Push push;
-				push.mode = Push::LINEAR;
-				push.approach = sampleRandomPushApproach(obj_);
-				push.distance = 0.05;
-				moveit::planning_interface::MoveGroupInterface::Plan plan;
-				robot_state::RobotState rstate(*group_.getCurrentState());
-				if(computeCartesianPushTraj(push, plan.trajectory_, rstate)) {
-					// move to pre-push position
-					group_.setJointValueTarget(rstate);
-					group_.move();
+				if(marker_ != NULL) {
+                    Push push;
+                    push.mode = Push::LINEAR;
+                    push.approach = sampleRandomPushApproach();
+                    push.distance = 0.05;
+                    /*
+                       moveit::planning_interface::MoveGroupInterface::Plan plan;
+                       robot_state::RobotState rstate(*group_.getCurrentState());
+                       if(computeCartesianPushTraj(push, plan.trajectory_, rstate)) {
+                    // move to pre-push position
+                    group_.setJointValueTarget(rstate);
+                    group_.move();
 
-					// push object
-					group_.execute(plan);
+                    // push object
+                    group_.execute(plan);
 
-					// move endeffector up
-					geometry_msgs::PoseStamped pose = group_.getCurrentPose();
-					pose.pose.position.z += 0.2;
-					group_.setJointValueTarget(pose);
-					group_.move();
-				} else {
-					ROS_INFO_STREAM("Failed to plan and execute push trajectory!");
-				}
+                    // move endeffector up
+                    geometry_msgs::PoseStamped pose = group_.getCurrentPose();
+                    pose.pose.position.z += 0.2;
+                    group_.setJointValueTarget(pose);
+                    group_.move();
+                    } else {
+                    ROS_INFO_STREAM("Failed to plan and execute push trajectory!");
+                    }
+                    */
+                }
 			}
 
 		private:
 
-			PushApproach sampleRandomPushApproach(moveit_msgs::CollisionObject& obj) {
+			PushApproach sampleRandomPushApproach() {
 				PushApproach approach;
-				approach.frame_id = obj.header.frame_id;
+				//approach.frame_id = marker_->header.frame_id;
+                approach.frame_id = "/pushable_object_0";
 
 				geometry_msgs::Pose approach_pose;
-				sampleRandomContactPoint(obj, approach_pose);
-
+				sampleRandomContactPoint(approach_pose);
 				approach.point = approach_pose.position;
 				approach.normal = approach_pose.orientation;
 				approach.angle = sampleRandomPushAngle();
+                // visualize contact point with arrow marker
+                visualizePushApproach(approach.frame_id, approach_pose, approach.angle);
 				return approach;
 			}
 
+            void visualizePushApproach(std::string frame_id, geometry_msgs::Pose pose, double angle) {
+                visualization_msgs::Marker approach;
+                approach.type = visualization_msgs::Marker::ARROW;
+                //approach.header.frame_id = frame_id;
+                approach.header.frame_id = "/pushable_object_0";
+                approach.header.stamp = ros::Time();
+                approach.id = 0;
+                approach.action = visualization_msgs::Marker::ADD;
+
+                geometry_msgs::Pose push_direction;
+                push_direction.orientation = tf::createQuaternionMsgFromYaw(angle);
+
+                float arrow_len = 0.04;
+                geometry_msgs::Pose arrow_offset;
+                arrow_offset.orientation.w = 1;
+                arrow_offset.position.x = -arrow_len;
+
+                Eigen::Affine3d offset_affine;
+                Eigen::Affine3d direction_affine;
+                Eigen::Affine3d pose_affine;
+                tf::poseMsgToEigen(arrow_offset, offset_affine);
+                tf::poseMsgToEigen(push_direction, direction_affine);
+                tf::poseMsgToEigen(pose, pose_affine);
+                tf::poseEigenToMsg(pose_affine * direction_affine * offset_affine, approach.pose);
+
+                approach.scale.x = arrow_len;
+                approach.scale.y = 0.01;
+                approach.scale.z = 0.01;
+                approach.color.a = 1.0;
+                approach.color.r = 1.0;
+                approach.lifetime = ros::Duration(5);
+                contact_point_pub_.publish(approach);
+            }
+
 			bool computeCartesianPushTraj(tams_ur5_push_execution::Push& push, moveit_msgs::RobotTrajectory& trajectory, robot_state::RobotState& rstate) {
-				if(push.mode == tams_ur5_push_execution::Push::LINEAR) {
-					// extract push direction and point
-					tf::Quaternion push_orientation;
-					tf::quaternionMsgToTF(tf::createQuaternionMsgFromYaw(push.approach.angle), push_orientation);
-					tf::Quaternion push_normal;
-					tf::quaternionMsgToTF(push.approach.normal, push_normal);
-					tf::Quaternion push_direction = push_normal + push_orientation;
-					tf::Vector3 approach_point;
-					tf::pointMsgToTF(push.approach.point, approach_point);
+                if(push.mode == tams_ur5_push_execution::Push::LINEAR) {
+                    //push direction
+                    geometry_msgs::Pose push_direction;
+                    push_direction.orientation = tf::createQuaternionMsgFromYaw(push.approach.angle);
 
-					tf::Transform approach;
-					approach.setOrigin(approach_point);
-					approach.setRotation(push_direction);
+                    //trajectory distances
+                    float pre_push_distance = 0.05;
+                    float push_distance = 0.05;
 
-					tf::Transform start_point;
-					geometry_msgs::Point start;
-					start.x = -0.1; //TODO: move pre-approach distance to msg
-					tf::Vector3 start_v;
-					tf::pointMsgToTF(start,start_v);
-					start_point.setOrigin(start_v);
-					start_point.setRotation(tf::Quaternion::getIdentity());
-					start_point *= approach;
+                    //pre push offset
+                    geometry_msgs::Pose start_pose;
+                    start_pose.orientation.w = 1;
+                    start_pose.position.x = -pre_push_distance;
 
-					tf::Transform goal_point;
-					geometry_msgs::Point goal;
-					start.x = push.distance;
-					tf::Vector3 goal_v;
-					tf::pointMsgToTF(goal,goal_v);
-					goal_point.setOrigin(goal_v);
-					goal_point.setRotation(tf::Quaternion::getIdentity());
-					goal_point *= approach;
+                    Eigen::Affine3d start_pose_affine;
+                    Eigen::Affine3d direction_affine;
+                    Eigen::Affine3d pose_affine;
+                    tf::poseMsgToEigen(start_pose, start_pose_affine);
+                    tf::poseMsgToEigen(push_direction, direction_affine);
+                    geometry_msgs::Pose pose;
+                    pose.position = push.approach.point;
+                    pose.orientation = push.approach.normal;
+                    tf::poseMsgToEigen(pose, pose_affine);
+                    start_pose_affine = pose_affine * direction_affine * start_pose_affine;
 
+                    // compute waypoints
 					std::vector<geometry_msgs::Pose> waypoints;
 					int step_count = 10;
-					tf::Vector3 step = (goal_point.getOrigin() - start_point.getOrigin()) / step_count;
-					tf::Vector3 start_origin = start_point.getOrigin();
-					geometry_msgs::Pose wp;
-					wp.orientation = tf::createQuaternionMsgFromRollPitchYaw(0.0, 0.5*M_PI, 0.0);
-
+                    float step_size = (pre_push_distance + push_distance) / (float)step_count;
+                    geometry_msgs::Pose waypoint;
+                    Eigen::Affine3d waypoint_affine;
+                    waypoint.orientation.w = 1;
 					for(int i = 0; i <= step_count; i++) {
-						start_point.setOrigin(start_origin + i * step);
-						tf::poseTFToMsg(start_point, wp);
-						waypoints.push_back(wp);
+                        waypoint.position.x = i * step_size;
+                        tf::poseMsgToEigen(waypoint, waypoint_affine);
+                        tf::poseEigenToMsg(start_pose_affine * waypoint_affine, waypoint);
+						waypoints.push_back(waypoint);
 					}
 
 					group_.setPoseReferenceFrame(push.approach.frame_id);
@@ -126,6 +179,48 @@ namespace tams_ur5_push_execution
 				}
 				return false;
 			}
+
+            /**
+             * Sample random contact point from marker
+             */
+			bool sampleRandomContactPoint(geometry_msgs::Pose& pose) {
+				// we expect a single BOX primitive for now
+				geometry_msgs::Point contact_point;
+				//Sample contact point from obj shape
+				if(marker_->type == visualization_msgs::Marker::CUBE) {
+					double dim_x = marker_->scale.x;
+					double dim_y = marker_->scale.y;
+
+					double cube_len = 2 * (dim_x + dim_y);
+					std::uniform_real_distribution<> dis(0.0, cube_len);
+					double p = dis(gen);
+					if(p <= dim_x) {
+						pose.position.x = p;
+						pose.position.y = 0;
+						pose.orientation = tf::createQuaternionMsgFromYaw(0.5*M_PI);
+					} else if (p <= dim_x + dim_y) {
+						pose.position.x = dim_x;
+						pose.position.y = p - dim_x;
+						pose.orientation = tf::createQuaternionMsgFromYaw(M_PI);
+					} else if (p <= 2 * dim_x + dim_y) {
+						pose.position.x = 2 * dim_x + dim_y - p;
+						pose.position.y = dim_y;
+						pose.orientation = tf::createQuaternionMsgFromYaw(1.5*M_PI);
+					} else {
+						pose.position.x = 0;
+						pose.position.y = 2 * (dim_x + dim_y) - p;
+						pose.orientation = tf::createQuaternionMsgFromYaw(0.0);
+					}
+					// adjust to center
+					pose.position.x -= 0.5*dim_x;
+					pose.position.y -= 0.5*dim_y;
+                    //TODO: transform pose with marker pose offset
+					return true;
+				}
+				return false;
+			}
+
+
 
 			bool sampleRandomContactPoint(moveit_msgs::CollisionObject& obj, geometry_msgs::Pose& pose) {
 				// we expect a single BOX primitive for now
@@ -164,8 +259,12 @@ namespace tams_ur5_push_execution
 			}
 
 			float sampleRandomPushAngle() {
-				std::normal_distribution<> d{0,0.2};
+				std::normal_distribution<> d{0,0.5};
 				return d(gen);
+			}
+
+			void onDetectObjects(visualization_msgs::Marker marker) {
+				marker_ = &marker;
 			}
 	};
 }
@@ -196,9 +295,13 @@ int main(int argc, char** argv) {
 	moveit::planning_interface::PlanningSceneInterface psi;
 	moveit_msgs::CollisionObject box = spawnObject(psi, "box", 0.05, 0.1, 0.05); 
 	moveit::planning_interface::MoveGroupInterface arm("arm");
+
 	tams_ur5_push_execution::Pusher pusher(arm, box);
-	pusher.performRandomPush();
-	return 0;
+    while(ros::ok()) {
+        pusher.performRandomPush();
+        ros::Duration(3).sleep();
+    }
+    return 0;
 }
 
 
