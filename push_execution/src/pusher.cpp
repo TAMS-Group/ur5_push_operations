@@ -25,8 +25,8 @@ float MIN_TABLE_DISTANCE = 0.02;
 float WORKABLE_TIP_LENGTH = 0.08;
 
 // Range to restrict the object on the table
-float SAFETY_RANGE = 0.25; // Outside of this range the object is pushed towards the center
-float EMERGENCY_RANGE = 0.35; // Outside of this range the experiment is aborted
+float SAFETY_RANGE = 0.15; // Outside of this range the object is pushed towards the center
+float EMERGENCY_RANGE = 0.3; // Outside of this range the experiment is aborted
 
 
 namespace tams_ur5_push_execution
@@ -52,8 +52,10 @@ namespace tams_ur5_push_execution
 
             visualization_msgs::Marker marker_;
 
+            const bool execute_plan_;
+
         public:
-            Pusher(moveit::planning_interface::MoveGroupInterface& group) : group_(group){
+            Pusher(moveit::planning_interface::MoveGroupInterface& group, bool execute_plan=false) : group_(group), execute_plan_(execute_plan){
 
                 nh_ = (*new ros::NodeHandle());
                 pnh_ = (*new ros::NodeHandle("~"));
@@ -91,13 +93,15 @@ namespace tams_ur5_push_execution
 
                         // move to pre_push pose
                         group_.setJointValueTarget(start_state);
-                        group_.move();
+                        if(execute_plan_)
+                            group_.move();
 
                         // remove collision object before push and for next plan
                         psi_.removeCollisionObjects(object_ids);
 
                         // push object and retreat
-                        group_.execute(push_plan);
+                        if(execute_plan_)
+                            group_.execute(push_plan);
 
                         // add collision object after run
                         psi_.applyCollisionObject(obj_);
@@ -255,31 +259,40 @@ namespace tams_ur5_push_execution
                 return false;
             }
 
-            bool sampleApproachPoseAndAngle(visualization_msgs::Marker& marker, geometry_msgs::Pose& pose, double& angle, int attempts=20) {
-                float distance = std::sqrt(std::pow(marker.pose.position.x,2) + std::pow(marker.pose.position.z,2));
+            bool sampleApproachPoseAndAngle(visualization_msgs::Marker& marker, geometry_msgs::Pose& pose, double& angle, int attempts=100) {
+                geometry_msgs::PoseStamped object_pose, marker_pose;
+                marker_pose.pose = marker.pose;
+                marker_pose.header.frame_id = marker.header.frame_id;
+                tf_listener_.transformPose("/table_top", marker_pose, object_pose);
+                float distance = std::sqrt(std::pow(object_pose.pose.position.x,2) + std::pow(object_pose.pose.position.y,2));
                 if(distance < SAFETY_RANGE) {
                     pose = sampleRandomPointFromBox(marker_.scale.x, marker_.scale.y, marker_.scale.z);
                     angle = sampleRandomPushAngle();
                     return true;
                 }
                 if(distance < EMERGENCY_RANGE) {
+                    ROS_WARN("Object outside of SAFETY RANGE. Sampling for pushes towards table center!");
                     tf::Vector3 table_vec;
-                    tf::pointMsgToTF(marker.pose.position, table_vec);
+                    object_pose.pose.position.z = 0.0;
+                    tf::pointMsgToTF(object_pose.pose.position, table_vec);
                     table_vec = -table_vec;
 
                     tf::Quaternion obj_orientation;
                     tf::Quaternion push_normal;
                     tf::Quaternion push_direction;
                     push_direction.setRPY(0.0, 0.0, angle);
-                    tf::quaternionMsgToTF(marker.pose.orientation, obj_orientation);
+                    tf::quaternionMsgToTF(object_pose.pose.orientation, obj_orientation);
                     tf::Vector3 push_vec(1,0,0);
 
                     for(int i = 0; i < attempts; i++) {
                         pose = sampleRandomPointFromBox(marker_.scale.x, marker_.scale.y, marker_.scale.z);
                         angle = sampleRandomPushAngle();
                         tf::quaternionMsgToTF(pose.orientation, push_normal);
+                        tf::Vector3 push_vec(1,0,0);
                         push_vec = tf::quatRotate(obj_orientation * push_normal * push_direction, push_vec);
-                        if(table_vec.angle(push_vec) < (5.0 / 180.0 * M_PI)) {
+                        double angle_limit = 20.0 / 180.0 * M_PI;
+                        double angle_towards_table = table_vec.angle(push_vec);
+                        if(angle_towards_table < angle_limit || angle_towards_table > (2*M_PI - angle_limit)) {
                             return true;
                         }
                     }
@@ -337,7 +350,6 @@ namespace tams_ur5_push_execution
             }
 
             void onDetectObjects(visualization_msgs::Marker marker) {
-                marker.position.x = 0.3;
                 if(marker_.id != marker.id && createCollisionObject(marker)) {
                     marker_ = marker;
                 }
