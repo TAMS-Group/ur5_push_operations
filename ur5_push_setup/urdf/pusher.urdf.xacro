@@ -1,0 +1,34 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro"
+       name="pusher" > 
+  <xacro:property name="pi" value="3.1415926535897931" />
+  <xacro:macro name="pusher" params="name parent *origin">
+
+  <!-- pusher attachment -->
+  <link name="${name}">
+	  <visual>
+		  <geometry>
+			  <mesh filename="package://ur5_push_setup/meshes/visual/pusher_2_binary.stl" scale="0.001 0.001 0.001"/>
+		  </geometry>
+		  <material name="gray"/>
+	  </visual>
+	  <collision>
+		  <geometry>
+			  <mesh filename="package://ur5_push_setup/meshes/collision/pusher_2_binary.stl" scale="0.001 0.001 0.001"/>
+		  </geometry>
+	  </collision>
+  </link>
+
+  <joint name="${name}_joint" type="fixed">
+	  <parent link="${parent}"/>
+	  <child link="${name}"/>
+	  <insert_block name="origin"/>
+  </joint>
+  <link name="${name}0"/>
+  <joint name="${name}_joint_0" type="fixed">
+	  <parent link="${name}"/>
+	  <child link="${name}0"/>
+	  <origin xyz="0.0 0.2 0.0" rpy="0.0 0.0 ${pi/2}" />
+  </joint>
+  </xacro:macro>
+</robot>
