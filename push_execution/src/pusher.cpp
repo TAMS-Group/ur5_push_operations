@@ -378,9 +378,17 @@ int main(int argc, char** argv) {
     ros::init(argc, argv, "push_execution_node");
     ros::AsyncSpinner spinner(4);
     spinner.start();
+    bool execute = false;
+    if(argc > 1) {
+        if(argc == 2 && std::strcmp(argv[1], "execute") == 0) {
+            ROS_WARN_STREAM("Execution of push operations enabled!");
+            execute = true;
+        } else
+            ROS_WARN_STREAM("Could not process arguments! Pass 'execute' to enable execution of push movements.");
+    }
     moveit::planning_interface::MoveGroupInterface arm("arm");
 
-    tams_ur5_push_execution::Pusher pusher(arm);
+    tams_ur5_push_execution::Pusher pusher(arm, execute);
     while(ros::ok()) {
         pusher.performRandomPush();
         ros::Duration(3).sleep();
