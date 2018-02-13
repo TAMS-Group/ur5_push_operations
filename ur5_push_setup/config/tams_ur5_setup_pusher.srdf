@@ -510,4 +510,50 @@
     <disable_collisions link1="pusher" link2="ur5_wrist_1_link" reason="Never" />
     <disable_collisions link1="pusher" link2="ur5_wrist_2_link" reason="Never" />
     <disable_collisions link1="pusher" link2="ur5_wrist_3_link" reason="Never" />
+    <disable_collisions link1="mounted_holder" link2="plug_collision_model_link_1" reason="Never" />
+    <disable_collisions link1="mounted_holder" link2="plug_collision_model_link_2" reason="Never" />
+    <disable_collisions link1="mounted_holder" link2="r200_camera_link" reason="Adjacent" />
+    <disable_collisions link1="mounted_holder" link2="s_model_adapter" reason="Never" />
+    <disable_collisions link1="mounted_holder" link2="s_model_finger_1_link_0" reason="Never" />
+    <disable_collisions link1="mounted_holder" link2="s_model_finger_1_link_1" reason="Never" />
+    <disable_collisions link1="mounted_holder" link2="s_model_finger_1_link_2" reason="Never" />
+    <disable_collisions link1="mounted_holder" link2="s_model_finger_1_link_3" reason="Never" />
+    <disable_collisions link1="mounted_holder" link2="s_model_finger_2_link_0" reason="Never" />
+    <disable_collisions link1="mounted_holder" link2="s_model_finger_2_link_1" reason="Never" />
+    <disable_collisions link1="mounted_holder" link2="s_model_finger_2_link_2" reason="Never" />
+    <disable_collisions link1="mounted_holder" link2="s_model_finger_2_link_3" reason="Never" />
+    <disable_collisions link1="mounted_holder" link2="s_model_finger_middle_link_0" reason="Never" />
+    <disable_collisions link1="mounted_holder" link2="s_model_finger_middle_link_1" reason="Never" />
+    <disable_collisions link1="mounted_holder" link2="s_model_finger_middle_link_2" reason="Never" />
+    <disable_collisions link1="mounted_holder" link2="s_model_finger_middle_link_3" reason="Never" />
+    <disable_collisions link1="mounted_holder" link2="s_model_palm" reason="Never" />
+    <disable_collisions link1="mounted_holder" link2="ur5_ee_link" reason="Never" />
+    <disable_collisions link1="mounted_holder" link2="ur5_wrist_1_link" reason="Never" />
+    <disable_collisions link1="mounted_holder" link2="ur5_wrist_2_link" reason="Never" />
+    <disable_collisions link1="mounted_holder" link2="ur5_wrist_3_link" reason="Never" />
+    <disable_collisions link1="mounted_holder" link2="ft_fts_robotside" reason="Default" />
+    <disable_collisions link1="mounted_holder" link2="ft_adapter" reason="Adjacent" />
+    <disable_collisions link1="r200_camera_link" link2="s_model_adapter" reason="Never" />
+    <disable_collisions link1="r200_camera_link" link2="s_model_finger_1_link_0" reason="Never" />
+    <disable_collisions link1="r200_camera_link" link2="s_model_finger_1_link_1" reason="Never" />
+    <disable_collisions link1="r200_camera_link" link2="s_model_finger_1_link_2" reason="Never" />
+    <disable_collisions link1="r200_camera_link" link2="s_model_finger_1_link_3" reason="Never" />
+    <disable_collisions link1="r200_camera_link" link2="s_model_finger_2_link_0" reason="Never" />
+    <disable_collisions link1="r200_camera_link" link2="s_model_finger_2_link_1" reason="Never" />
+    <disable_collisions link1="r200_camera_link" link2="s_model_finger_2_link_2" reason="Never" />
+    <disable_collisions link1="r200_camera_link" link2="s_model_finger_2_link_3" reason="Never" />
+    <disable_collisions link1="r200_camera_link" link2="s_model_finger_middle_link_0" reason="Never" />
+    <disable_collisions link1="r200_camera_link" link2="s_model_finger_middle_link_1" reason="Never" />
+    <disable_collisions link1="r200_camera_link" link2="s_model_finger_middle_link_2" reason="Never" />
+    <disable_collisions link1="r200_camera_link" link2="s_model_finger_middle_link_3" reason="Never" />
+    <disable_collisions link1="r200_camera_link" link2="s_model_palm" reason="Never" />
+    <disable_collisions link1="r200_camera_link" link2="ur5_ee_link" reason="Never" />
+    <disable_collisions link1="r200_camera_link" link2="ur5_wrist_1_link" reason="Never" />
+    <disable_collisions link1="r200_camera_link" link2="ur5_wrist_2_link" reason="Never" />
+    <disable_collisions link1="r200_camera_link" link2="ur5_wrist_3_link" reason="Never" />
+    <disable_collisions link1="r200_camera_link" link2="wall" reason="User" />
+    <disable_collisions link1="r200_camera_link" link2="ft_adapter" reason="Never" />
+    <disable_collisions link1="r200_camera_link" link2="ft_fts_robotside" reason="Never" />
+    <disable_collisions link1="r200_camera_link" link2="plug_collision_model_link_1" reason="Never" />
+    <disable_collisions link1="r200_camera_link" link2="plug_collision_model_link_2" reason="Never" />
 </robot>
