@@ -7,6 +7,9 @@
 #include <moveit/planning_scene/planning_scene.h>
 #include <moveit_msgs/CollisionObject.h>
 
+#include <moveit/trajectory_processing/iterative_time_parameterization.h>
+#include <moveit/robot_trajectory/robot_trajectory.h>
+
 #include <tf/transform_listener.h>
 
 #include <eigen_conversions/eigen_msg.h>
@@ -204,7 +207,6 @@ namespace tams_ur5_push_execution
                     // retreat pose
                     geometry_msgs::Pose retreat_pose;
                     retreat_pose.orientation = pusher_orientation;
-                    retreat_pose.position.x = push.distance * 0.8;
                     retreat_pose.position.z += 0.1;
 
                     // create affine transforms
@@ -248,11 +250,18 @@ namespace tams_ur5_push_execution
                         state = group_.getJointValueTarget();
                         group_.setStartState(state);
                         //compute cartesian path
-                        float success_fraction = group_.computeCartesianPath(waypoints, 0.3, 3, trajectory);
+                        float success_fraction = group_.computeCartesianPath(waypoints, 0.01, 3, trajectory);
                         group_.setStartStateToCurrentState();
                         group_.clearPoseTargets();
                         if(success_fraction == 1.0) {
+                            trajectory_processing::IterativeParabolicTimeParameterization iptp;
+                            robot_trajectory::RobotTrajectory traj(group_.getRobotModel(), group_.getName());
+                            traj.setRobotTrajectoryMsg(state, trajectory);
+                            iptp.computeTimeStamps(traj, 0.2, 0.5);
+                            traj.getRobotTrajectoryMsg(trajectory);
                             return true;
+                        } else {
+                            ROS_ERROR_STREAM("Could not plan cartesian push path. Achieved only " << success_fraction * 100 << "%");
                         }
                     }
                 }
