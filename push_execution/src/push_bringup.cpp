@@ -1,17 +1,29 @@
 #include <math.h>
 #include <stdio.h>
+#include <boost/variant.hpp>
 //#include <ncurses.h>
 
 #include <ros/ros.h>
 
 #include <moveit/robot_state/conversions.h>
 #include <moveit/move_group_interface/move_group_interface.h>
+#include <moveit/planning_scene_interface/planning_scene_interface.h>
+#include <moveit_msgs/AttachedCollisionObject.h>
+#include <moveit_msgs/CollisionObject.h>
 #include <geometry_msgs/Quaternion.h>
 #include <geometry_msgs/Pose.h>
+#include <geometric_shapes/mesh_operations.h>
+#include <geometric_shapes/shape_operations.h>
+#include <shape_msgs/Mesh.h>
+#include <Eigen/Geometry>
+
+#include <ur5_pusher/pusher.h>
 
 std::string COMMAND_MAINTENANCE = "m";
 std::string COMMAND_GRIPPER_OPEN = "o";
 std::string COMMAND_GRIPPER_CLOSE = "c";
+std::string COMMAND_PUSHER_ATTACH = "pa";
+std::string COMMAND_PUSHER_DETACH = "pd";
 std::string COMMAND_DEMO = "r";
 std::string COMMAND_HELP = "h";
 std::string COMMAND_QUIT = "q";
@@ -22,11 +34,25 @@ class PushBringup
 	public:
 	geometry_msgs::Quaternion orientation_down_ = tf::createQuaternionMsgFromRollPitchYaw(0.0, 0.5*M_PI, 0.0);
 	geometry_msgs::Quaternion orientation_up_ = tf::createQuaternionMsgFromRollPitchYaw(0.0, -0.5*M_PI, 0.0);
-	moveit::planning_interface::MoveGroupInterface arm_;
+	ur5_pusher::Pusher arm_;
 	moveit::planning_interface::MoveGroupInterface gripper_;
+	moveit::planning_interface::PlanningSceneInterface psi_;
 
 
 		PushBringup() : arm_("arm"), gripper_("gripper"){
+            		const std::string resource = "file:///informatik2/students/home/1kayser/ros_demo/src/tams_ur5_push_operations/ur5_push_setup/meshes/pusher_2_aligned_x-binary.stl";
+			Eigen::Affine3d transform;
+			geometry_msgs::Pose pose;
+
+			//pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(0.0, 0.0, 0.5*M_PI);
+			//pose.position.y = 0.2 + 0.05625;
+			//std::string parent_link = "s_model_palm";
+			std::string parent_link = "s_model_tool0";
+			pose.position.x = 0.2 - 0.0305;
+			pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(0.0, -0.5*M_PI, 0.0);
+			tf::poseMsgToEigen(pose, transform);
+			arm_.setTouchLinks(gripper_.getLinkNames());
+			arm_.loadPusher(resource, transform, parent_link, "pusher0");
 		};
 
 		bool moveToMaintenancePose() {
@@ -39,9 +65,9 @@ class PushBringup
 			// move gripper up to mount pusher
 			geometry_msgs::Pose pose;
 			pose.position.z = z_val;
-			pose.orientation = orientation_up_;
+			pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(M_PI, 0.0, 0.0);
 			arm_.setPoseReferenceFrame("table_top");
-			arm_.setPoseTarget(pose);
+			arm_.setPusherPoseTarget(pose);
 			return bool(arm_.move());
 		}
 
@@ -49,9 +75,9 @@ class PushBringup
 			// move gripper up to mount pusher
 			geometry_msgs::Pose pose;
 			pose.position.z = z_val;
-			pose.orientation = orientation_down_;
+			pose.orientation.w = 1.0;
 			arm_.setPoseReferenceFrame("table_top");
-			arm_.setPoseTarget(pose);
+			arm_.setPusherPoseTarget(pose);
 			return bool(arm_.move());
 		}
 
@@ -65,6 +91,44 @@ class PushBringup
 			gripper_.move();
 		}
 
+		void importMeshFromResource(shape_msgs::Mesh& mesh_msg) {
+			std::string resource = "file:///informatik2/students/home/1kayser/ros_demo/src/tams_ur5_push_operations/ur5_push_setup/meshes/pusher_2_aligned-binary.stl";
+			Eigen::Vector3d scale(0.001, 0.001, 0.001);
+			shapes::Shape* shape = shapes::createMeshFromResource(resource, scale);
+			shapes::ShapeMsg shape_msg;
+			shapes::constructMsgFromShape(shape, shape_msg);
+			mesh_msg = boost::get<shape_msgs::Mesh>(shape_msg);
+		}
+
+		moveit_msgs::AttachedCollisionObject getAttachedPusher() {
+			// create pusher collision object
+			moveit_msgs::CollisionObject pusher;
+			pusher.header.frame_id = "s_model_palm";
+			pusher.id = "pusher0";
+			shape_msgs::Mesh mesh;
+			importMeshFromResource(mesh);
+			pusher.meshes.push_back(mesh);
+			geometry_msgs::Pose pose;
+			pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(0.0, 0.0, 0.5*M_PI);
+			pose.position.y = 0.2 + 0.05625;
+			pusher.mesh_poses.push_back(pose);
+
+			// create AttachedCollisionObject
+			moveit_msgs::AttachedCollisionObject attached_pusher;
+			attached_pusher.link_name = arm_.getEndEffectorLink();
+			attached_pusher.object = pusher;
+			attached_pusher.touch_links = gripper_.getLinkNames();
+			return attached_pusher;
+		}
+
+		void attachPusher() {
+			arm_.attachPusher();
+		}
+
+		void detachPusher() {
+			arm_.detachPusher();
+		}
+
 		void wait(float seconds) {
 			ros::Duration(seconds).sleep();
 		}
@@ -72,22 +136,23 @@ class PushBringup
 		bool runDemoMovement(int times=0) {
 			// compute and perform 8 movement
 			moveToDownPose(0.04);
-			geometry_msgs::Pose pose = arm_.getCurrentPose().pose;
 			arm_.setPoseReferenceFrame("table_top");
 			//geometry_msgs::Pose pose;
+			geometry_msgs::Pose pose;
+			pose.orientation.w = 1.0;
 			pose.position.z = 0.04;
 			//pose.orientation = orientation_down_;
 			moveit::planning_interface::MoveGroupInterface::Plan plan;
 			std::vector<geometry_msgs::Pose> waypoints;
 			float radius = 0.05;
 			double angle = 0.0;
-			for(int i = 0; i < 50; i++) {
+			for(int i = 0; i < 30; i++) {
 				angle = 2 * M_PI * i / 50.0;
 				pose.position.x = sin(2 * angle) * radius;
 				pose.position.y = -sin(angle) * radius;
 				waypoints.push_back(pose);
 			}
-			float success = arm_.computeCartesianPath(waypoints, 0.03, 3, plan.trajectory_);
+			float success = arm_.computeCartesianPushPath(waypoints, 0.03, 3, plan.trajectory_);
 			if(success==1.0) {
 				int count = 0;
 				// TODO: add keyboard callback
@@ -145,6 +210,12 @@ int main(int argc, char** argv) {
 		} else if (input == COMMAND_GRIPPER_CLOSE){
 			std::cout << "Closing gripper" << std::endl;
 			pb.closeGripper();
+		} else if (input == COMMAND_PUSHER_ATTACH){
+			std::cout << "Attaching pusher" << std::endl;
+			pb.attachPusher();
+		} else if (input == COMMAND_PUSHER_DETACH){
+			std::cout << "Detaching pusher" << std::endl;
+			pb.detachPusher();
 		} else if (input == COMMAND_DEMO){
 			std::cout << "Running demo push movement." << std::endl;
 			pb.runDemoMovement(4);

@@ -31,23 +31,31 @@ generate_messages(
 	geometry_msgs
 )
 
-catkin_package(CATKIN_DEPENDS message_runtime)
+catkin_package(INCLUDE_DIRS
+		include
+		CATKIN_DEPENDS 
+		message_runtime)
+
+set(PROJECT_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/include/ur5_pusher)
 
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
 include_directories(
-	#include
+    include
  ${catkin_INCLUDE_DIRS}
 )
 
+add_library(ur5_pusher src/pusher.cpp)
+
+add_executable(push_execution src/push_execution.cpp)
+target_link_libraries(push_execution ${catkin_LIBRARIES} ur5_pusher)
 
 ## Declare a C++ library
 add_executable(pusher src/pusher.cpp)
 target_link_libraries(pusher ${catkin_LIBRARIES})
 
-
 add_executable(push_bringup src/push_bringup.cpp)
-target_link_libraries(push_bringup ${catkin_LIBRARIES})
+target_link_libraries(push_bringup ${catkin_LIBRARIES} ur5_pusher)
 #add_dependencies(push_bringup ${${PROJECT_NAME}_EXPORTED_TARGETS})
 
-
+install(DIRECTORY include DESTINATION ${CATKIN_GLOBAL_INCLUDE_DESTINATION})
