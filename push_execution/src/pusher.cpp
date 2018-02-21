@@ -74,11 +74,60 @@ namespace ur5_pusher
 
     bool Pusher::loadPusher(const std::string& resource, const Eigen::Affine3d& transform, const std::string& parent_link, const std::string& pusher_id)
     {
-        setPusherMeshResource(resource);
-        setPusherTipTransform(transform);
-        setPusherParentLink(parent_link);
-        setPusherId(pusher_id);
-        return loadPusher();
+	    setPusherMeshResource(resource);
+	    setPusherTipTransform(transform);
+	    setPusherParentLink(parent_link);
+	    setPusherId(pusher_id);
+	    return loadPusher();
+    }
+
+    bool Pusher::loadFromAttachedObject() {
+	    //check if pusher is attached first
+	    if(isPusherAttached()) {
+		    ROS_ERROR("Could not load pusher from attached object since there is already a pusher attached!");
+		    return false;
+	    }
+	    
+	    // investigate attached collision objects
+	    std::map<std::string, moveit_msgs::AttachedCollisionObject> object_map = psi_.getAttachedObjects();
+	    if(object_map.size() == 1) { // only a single object is allowed
+		    std::map<std::string, moveit_msgs::AttachedCollisionObject>::iterator object_iterator = object_map.begin();
+		    moveit_msgs::AttachedCollisionObject pusher = object_iterator->second;
+
+		    // check if mesh poses are used
+		    if(pusher.object.mesh_poses.size() == 0) {
+			    ROS_ERROR("Unable to use attached object as pusher since no mesh poses are defined!");
+			    return false;
+		    }
+
+		    // check if pusher is attached to endeffector
+		    if(pusher.link_name != getEndEffectorLink()) {
+			    ROS_ERROR("Unable to use attached object as pusher since parent link is not the endeffector!");
+			    ROS_ERROR_STREAM("parent link: " << pusher.link_name << " - endeffector: " << getEndEffectorLink());
+
+
+			    return false;
+		    }
+
+		    // load parameters and set pusher_attached_ to true
+		    tf::poseMsgToEigen(pusher.object.mesh_poses[0], tip_transform_);
+		    parent_link_ = pusher.link_name;
+		    touch_links_ = pusher.touch_links;
+		    pusher_id_ = pusher.object.id;
+		    pusher_object_ = pusher;
+		    knows_pusher_ = true;
+		    pusher_attached_ = true;
+
+		    // pusher is successfully loaded
+		    ROS_INFO("Pusher successfully loaded from attached collision object!");
+		    return true;
+
+	    } else if(object_map.empty()) {
+		    ROS_ERROR("Unable to load pusher since no attached collision objects can be found!");
+	    } else {
+		    ROS_ERROR("Unable to load pusher since there is more than one collision object attached!");
+	    }
+	    return false;
     }
 
     bool Pusher::isPusherAttached() const
@@ -112,41 +161,59 @@ namespace ur5_pusher
             pusher_attached_ = false;
             return true;
         } 
-
         ROS_WARN("No pusher attached! Nothing to do here.");
         return false;
     }
 
     bool Pusher::setPusherPoseTarget(const geometry_msgs::Pose& pose) {
-        Eigen::Affine3d pose_affine;
-        tf::poseMsgToEigen(pose, pose_affine);
-        return setPusherPoseTarget(pose_affine);
+	    Eigen::Affine3d pose_affine;
+	    tf::poseMsgToEigen(pose, pose_affine);
+	    return setPusherPoseTarget(pose_affine);
     }
 
     bool Pusher::setPusherPoseTarget(const Eigen::Affine3d& pose) {
-        return setPoseTarget(pose * tip_transform_.inverse());
+	    if(isPusherAttached()) {
+		    return setPoseTarget(pose * tip_transform_.inverse());
+	    } else {
+		    ROS_ERROR("Could not set pusher pose target since no pusher is attached!");
+		    return false;
+	    }
     }
 
     bool Pusher::setPusherJointValueTarget(const geometry_msgs::PoseStamped& pose_stamped) {
-        Eigen::Affine3d pose_affine;
-        tf::poseMsgToEigen(pose_stamped.pose, pose_affine);
-        return setPusherJointValueTarget(pose_affine, pose_stamped.header.frame_id);
+	    return setPusherJointValueTarget(pose_stamped.pose);
     }
 
-    bool Pusher::setPusherJointValueTarget(const Eigen::Affine3d& pose, const std::string& frame) {
-        return setJointValueTarget(pose * tip_transform_.inverse(), frame);
+    bool Pusher::setPusherJointValueTarget(const geometry_msgs::Pose& pose) {
+	    Eigen::Affine3d pose_affine;
+	    tf::poseMsgToEigen(pose, pose_affine);
+	    return setPusherJointValueTarget(pose_affine);
+    }
+
+    bool Pusher::setPusherJointValueTarget(const Eigen::Affine3d& pose) {
+	    if(isPusherAttached()) {
+		    return setJointValueTarget(pose * tip_transform_.inverse());
+	    } else {
+		    ROS_ERROR("Could not set pusher joint value target since no pusher is attached!");
+		    return false;
+	    }
     }
 
     double Pusher::computeCartesianPushPath(std::vector<geometry_msgs::Pose>& waypoints, double eef_step, double jump_threshold, moveit_msgs::RobotTrajectory& trajectory) {
-        std::vector<geometry_msgs::Pose> transformed_waypoints;
-        Eigen::Affine3d affine;
-        for(geometry_msgs::Pose wp : waypoints) {
-            tf::poseMsgToEigen(wp, affine);
-            geometry_msgs::Pose transformed_wp;
-            tf::poseEigenToMsg(affine * tip_transform_.inverse(), transformed_wp);
-            transformed_waypoints.push_back(transformed_wp);
-        }
-        return computeCartesianPath(transformed_waypoints, eef_step, jump_threshold, trajectory);
+	    if(isPusherAttached()) {
+		    std::vector<geometry_msgs::Pose> transformed_waypoints;
+		    Eigen::Affine3d affine;
+		    for(geometry_msgs::Pose wp : waypoints) {
+			    tf::poseMsgToEigen(wp, affine);
+			    geometry_msgs::Pose transformed_wp;
+			    tf::poseEigenToMsg(affine * tip_transform_.inverse(), transformed_wp);
+			    transformed_waypoints.push_back(transformed_wp);
+		    }
+		    return computeCartesianPath(transformed_waypoints, eef_step, jump_threshold, trajectory);
+	    } else {
+		    ROS_ERROR("Could not compute cartesian push path since no pusher is attached!");
+		    return 0.0;
+	    }
     }
 
     //TODO: Implement getCurrentPusherPose

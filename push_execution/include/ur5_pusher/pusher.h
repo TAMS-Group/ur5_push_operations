@@ -43,8 +43,8 @@ class Pusher : public moveit::planning_interface::MoveGroupInterface
 		std::string pusher_id_;
 		std::vector<std::string> touch_links_;
 
-		bool pusher_attached_;
-		bool knows_pusher_;
+		bool pusher_attached_ = false;
+		bool knows_pusher_ = false;
 
 		bool loadPusher();
 		moveit_msgs::AttachedCollisionObject getPusherObjectMsg(const shape_msgs::Mesh& mesh_msg, const geometry_msgs::Pose& pose_msg) const;
@@ -67,6 +67,8 @@ class Pusher : public moveit::planning_interface::MoveGroupInterface
 
 		bool loadPusher(const std::string& resource, const Eigen::Affine3d& transform, const std::string& parent_link, const std::string& pusher_id);
 
+		bool loadFromAttachedObject();
+
 		bool isPusherAttached() const;
 
 		bool knowsPusher() const;
@@ -81,7 +83,9 @@ class Pusher : public moveit::planning_interface::MoveGroupInterface
 
 		bool setPusherJointValueTarget(const geometry_msgs::PoseStamped& pose_stamped);
 
-		bool setPusherJointValueTarget(const Eigen::Affine3d& pose, const std::string& frame);
+		bool setPusherJointValueTarget(const geometry_msgs::Pose& pose);
+
+		bool setPusherJointValueTarget(const Eigen::Affine3d& pose);
 
 		double computeCartesianPushPath(std::vector<geometry_msgs::Pose>& waypoints, double eef_step, double jump_threshold, moveit_msgs::RobotTrajectory& trajectory);
 };
