@@ -16,6 +16,7 @@
 
 #include <visualization_msgs/Marker.h>
 
+#include <ur5_pusher/pusher.h>
 #include <tams_ur5_push_execution/Push.h>
 #include <tams_ur5_push_execution/PushApproach.h>
 
@@ -47,7 +48,7 @@ namespace tams_ur5_push_execution
             moveit::planning_interface::PlanningSceneInterface psi_;
             planning_scene::PlanningSceneConstPtr scene_;
 
-            moveit::planning_interface::MoveGroupInterface& group_;
+	    ur5_pusher::Pusher& pusher_;
 
             tf::TransformListener tf_listener_;
 
@@ -58,15 +59,15 @@ namespace tams_ur5_push_execution
             const bool execute_plan_;
 
         public:
-            PushExecution(moveit::planning_interface::MoveGroupInterface& group, bool execute_plan=false) : group_(group), execute_plan_(execute_plan){
+            PushExecution(ur5_pusher::Pusher& pusher, bool execute_plan=false) : pusher_(pusher), execute_plan_(execute_plan){
 
                 nh_ = (*new ros::NodeHandle());
                 pnh_ = (*new ros::NodeHandle("~"));
                 psi_ = (*new moveit::planning_interface::PlanningSceneInterface());
-                scene_ = std::make_shared<planning_scene::PlanningScene>(group_.getRobotModel());
+                scene_ = std::make_shared<planning_scene::PlanningScene>(pusher_.getRobotModel());
 
-                group_.setPlanningTime(5.0);
-                group_.setPlannerId("RRTConnectkConfigDefault");
+                pusher_.setPlanningTime(5.0);
+                pusher_.setPlannerId("RRTConnectkConfigDefault");
 
                 marker_sub_ = nh_.subscribe(MARKER_TOPIC, 1, &PushExecution::onDetectObjects, this);
                 contact_point_pub_ = nh_.advertise<visualization_msgs::Marker>("/push_approach", 0);
@@ -86,7 +87,7 @@ namespace tams_ur5_push_execution
 
                     // declare plan and start state
                     moveit::planning_interface::MoveGroupInterface::Plan push_plan;
-                    robot_state::RobotState start_state(*group_.getCurrentState());
+                    robot_state::RobotState start_state(*pusher_.getCurrentState());
 
                     //compute push and retreat trajectory together with start state
                     if(computeCartesianPushTraj(push, push_plan.trajectory_, start_state)) {
@@ -95,16 +96,16 @@ namespace tams_ur5_push_execution
                         psi_.applyCollisionObject(obj_);
 
                         // move to pre_push pose
-                        group_.setJointValueTarget(start_state);
+                        pusher_.setJointValueTarget(start_state);
                         if(execute_plan_)
-                            group_.move();
+                            pusher_.move();
 
                         // remove collision object before push and for next plan
                         psi_.removeCollisionObjects(object_ids);
 
                         // push object and retreat
                         if(execute_plan_)
-                            group_.execute(push_plan);
+                            pusher_.execute(push_plan);
 
                         // add collision object after run
                         psi_.applyCollisionObject(obj_);
@@ -141,7 +142,6 @@ namespace tams_ur5_push_execution
 
                 // visualize contact point with arrow marker
                 visualizePushApproach(approach.frame_id, approach_pose, approach.angle);
-
                 return approach;
             }
 
@@ -180,90 +180,84 @@ namespace tams_ur5_push_execution
 
             bool computeCartesianPushTraj(tams_ur5_push_execution::Push& push, moveit_msgs::RobotTrajectory& trajectory, robot_state::RobotState& state) {
                 if(push.mode == tams_ur5_push_execution::Push::LINEAR) {
-                    // contact point
+
+                    // object pose
+                    geometry_msgs::PoseStamped obj_pose;
+                    obj_pose.header.frame_id = push.approach.frame_id;
+                    obj_pose.pose.orientation.w = 1.0;
+                    tf_listener_.transformPose("table_top", obj_pose, obj_pose);
+                    Eigen::Affine3d obj_pose_affine;
+                    tf::poseMsgToEigen(obj_pose.pose, obj_pose_affine);
+
+                    // push direction
+                    Eigen::Affine3d direction(Eigen::AngleAxis<double>(push.approach.angle, Eigen::Vector3d::UnitZ()));
+
+                    // approach point
+                    Eigen::Affine3d approach_affine;
                     geometry_msgs::Pose pose;
                     pose.position = push.approach.point;
                     pose.orientation = push.approach.normal;
-
-                    //push direction
-                    geometry_msgs::Pose push_direction;
-                    push_direction.orientation = tf::createQuaternionMsgFromYaw(push.approach.angle);
+                    tf::poseMsgToEigen(pose, approach_affine);
+                    approach_affine = obj_pose_affine * approach_affine * direction;
 
                     //trajectory distances
-                    float pre_push_distance = 0.05;
+                    float approach_distance = 0.05;
 
-                    geometry_msgs::Quaternion pusher_orientation = tf::createQuaternionMsgFromRollPitchYaw(0.0, 0.5*M_PI, 0.0);
+                    // fill waypoints
+                    std::vector<geometry_msgs::Pose> waypoints;
+                    geometry_msgs::Pose waypoint;
+                    geometry_msgs::Quaternion orientation;
+                    orientation.w = 1.0;
+
+                    Eigen::Affine3d wp(Eigen::Affine3d::Identity()); // instantiate as identity transform!!!
+                    wp.translate(Eigen::Vector3d(-approach_distance, 0.0, 0.0));
+                    geometry_msgs::Pose pose_affine;
+                    tf::poseEigenToMsg(wp, pose_affine);
+
+                    tf::poseEigenToMsg(approach_affine * wp, waypoint);
+                    waypoint.orientation = orientation;
+                    waypoints.push_back(waypoint);
+
+                    wp.translate(Eigen::Vector3d(approach_distance + push.distance, 0.0, 0.0));
+                    tf::poseEigenToMsg(approach_affine * wp, waypoint);
+                    waypoint.orientation = orientation;
+                    waypoints.push_back(waypoint);
+
+                    wp.translate(Eigen::Vector3d(-push.distance, 0.0, 0.1));
+                    tf::poseEigenToMsg(approach_affine * wp, waypoint);
+                    waypoint.orientation = orientation;
+                    waypoints.push_back(waypoint);
 
                     // start pose
-                    geometry_msgs::Pose start_pose;
-                    start_pose.orientation = pusher_orientation;
-                    start_pose.position.x = -pre_push_distance;
-
-                    // goal pose
-                    geometry_msgs::Pose goal_pose;
-                    goal_pose.orientation = pusher_orientation;
-                    goal_pose.position.x = push.distance;
-
-                    // retreat pose
-                    geometry_msgs::Pose retreat_pose;
-                    retreat_pose.orientation = pusher_orientation;
-                    retreat_pose.position.z += 0.1;
-
-                    // create affine transforms
-                    Eigen::Affine3d start_pose_affine;
-                    Eigen::Affine3d goal_pose_affine;
-                    Eigen::Affine3d retreat_pose_affine;
-                    Eigen::Affine3d direction_affine;
-                    Eigen::Affine3d pose_affine;
-                    tf::poseMsgToEigen(start_pose, start_pose_affine);
-                    tf::poseMsgToEigen(goal_pose, goal_pose_affine);
-                    tf::poseMsgToEigen(retreat_pose, retreat_pose_affine);
-                    tf::poseMsgToEigen(push_direction, direction_affine);
-                    tf::poseMsgToEigen(pose, pose_affine);
-
-                    //compute start and goal pose from affine transforms
-                    tf::poseEigenToMsg(pose_affine * direction_affine * start_pose_affine, start_pose);
-                    tf::poseEigenToMsg(pose_affine * direction_affine * goal_pose_affine, goal_pose);
-                    tf::poseEigenToMsg(pose_affine * direction_affine * retreat_pose_affine, retreat_pose);
-
-                    //fill waypoints
-                    std::vector<geometry_msgs::Pose> waypoints;
-                    waypoints.push_back(start_pose);
-                    visualizePushApproach(push.approach.frame_id, start_pose, 0.0, 1);
-                    waypoints.push_back(goal_pose);
-                    waypoints.push_back(retreat_pose);
-                    visualizePushApproach(push.approach.frame_id, goal_pose, 0.0, 2);
-                    //TODO: add retreat waypoint
-
-                    group_.setPoseReferenceFrame(push.approach.frame_id);
-
-                    //ROS_INFO_STREAM("Planning push trajectory with start_pose:\n" << start_pose << "\ngoal_pose:\n" <<goal_pose);
-
                     geometry_msgs::PoseStamped ps;
-                    ps.pose = start_pose;
-                    ps.header.frame_id = push.approach.frame_id;
+                    ps.pose = waypoints[0];
+                    ps.header.frame_id = "table_top";
+                    tf_listener_.transformPose(pusher_.getPlanningFrame(), ps, ps);
 
-                    tf_listener_.transformPose(group_.getPlanningFrame(), ps, ps);
 
                     // create start state from IK
-                    if (group_.setJointValueTarget(ps)) {
-                        state = group_.getJointValueTarget();
-                        group_.setStartState(state);
+                    // TODO: try multiple solutions!
+                    if (pusher_.setPusherJointValueTarget(ps)) {
+                        state = pusher_.getJointValueTarget();
+                        pusher_.setStartState(state);
                         //compute cartesian path
-                        float success_fraction = group_.computeCartesianPath(waypoints, 0.01, 3, trajectory);
-                        group_.setStartStateToCurrentState();
-                        group_.clearPoseTargets();
+                        pusher_.setPoseReferenceFrame("table_top");
+                        double success_fraction = pusher_.computeCartesianPushPath(waypoints, 0.05, 3, trajectory);
+                        pusher_.setStartStateToCurrentState();
+                        pusher_.clearPoseTargets();
                         if(success_fraction == 1.0) {
                             trajectory_processing::IterativeParabolicTimeParameterization iptp;
-                            robot_trajectory::RobotTrajectory traj(group_.getRobotModel(), group_.getName());
+                            robot_trajectory::RobotTrajectory traj(pusher_.getRobotModel(), pusher_.getName());
                             traj.setRobotTrajectoryMsg(state, trajectory);
                             iptp.computeTimeStamps(traj, 0.2, 0.5);
                             traj.getRobotTrajectoryMsg(trajectory);
                             return true;
                         } else {
-                            ROS_ERROR_STREAM("Could not plan cartesian push path. Achieved only " << success_fraction * 100 << "%");
+                            ROS_ERROR_STREAM("Could not plan cartesian push path. Achieved " << success_fraction * 100 << "%");
                         }
-                    }
+                    } else {
+			    ROS_ERROR_STREAM("Unable to sample start state from start pose:\n" << ps);
+		    }
                 }
                 return false;
             }
@@ -395,7 +389,11 @@ int main(int argc, char** argv) {
         } else
             ROS_WARN_STREAM("Could not process arguments! Pass 'execute' to enable execution of push movements.");
     }
-    moveit::planning_interface::MoveGroupInterface arm("arm");
+    //moveit::planning_interface::MoveGroupInterface arm("arm");
+    ur5_pusher::Pusher arm("arm");
+    if(!arm.loadFromAttachedObject()) {
+	    return 1;
+    }
 
     tams_ur5_push_execution::PushExecution pusher(arm, execute);
     while(ros::ok()) {
