@@ -1,5 +1,5 @@
 <launch>
-	<include file="$(find ur5_push_setup)/launch/setup_demo.launch"/>
+	<include file="$(find tams_ur5_setup_moveit_config)/launch/demo.launch"/>
 
 	<include file="$(find object_recognition)/launch/object_recognition.launch">
 		<arg name="demo_mode" value="true"/>
