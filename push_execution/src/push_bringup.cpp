@@ -40,7 +40,7 @@ class PushBringup
 
 
 		PushBringup() : arm_("arm"), gripper_("gripper"){
-            		const std::string resource = "file:///informatik2/students/home/1kayser/ros_demo/src/tams_ur5_push_operations/ur5_push_setup/meshes/pusher_2_aligned_x-binary.stl";
+			const std::string resource = "package://ur5_push_setup/meshes/pusher_2_aligned_x-binary.stl";
 			Eigen::Affine3d transform;
 			geometry_msgs::Pose pose;
 
