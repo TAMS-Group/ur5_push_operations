@@ -28,6 +28,7 @@ class ObjectRecognitionNode {
 
         // measured object
         tf::Transform object_transform_;
+        int object_id_;
         int object_tag_id_;
         std::string object_frame_prefix_;
         ros::Time detection_time_;
@@ -84,7 +85,8 @@ class ObjectRecognitionNode {
 
             // april tag information
             // TODO: specify object tag mapping
-            ph_.param<int>("object_tag_id", object_tag_id_, 11);
+            ph_.param<int>("object_id", object_id_, 11);
+	    object_tag_id_ = objects_[object_id_].begin()->second["tag_id"];
             //ph_.param<double>("timeout", timeout_, 10);
         }
 
@@ -99,16 +101,16 @@ class ObjectRecognitionNode {
                 if(detection.id == object_tag_id_) {
                     // create marker
                     visualization_msgs::Marker marker;
-                    if(createObjectMarker(object_tag_id_, marker)) {
+                    if(createObjectMarker(object_id_, marker)) {
                         // extract transform from pose
                         detection_time_ = detection.pose.header.stamp;
                         geometry_msgs::PoseStamped pose = detection.pose;
                         tf_listener_.transformPose("/table_top", pose, pose);
-                        tf::StampedTransform transform = createNormalizedTransform(detection.pose.pose, marker);
+                        tf::StampedTransform transform = createNormalizedTransform(pose.pose, marker);
                         publishTransformAndMarker(transform, marker);
                         break;
                     } else {
-                        ROS_WARN_STREAM("Failed to create marker for object " << object_tag_id_ << "!");
+                        ROS_WARN_STREAM("Failed to create marker for object " << object_id_ << "!");
                     }
                 }
             }
@@ -160,8 +162,22 @@ class ObjectRecognitionNode {
         }
 
         tf::StampedTransform createNormalizedTransform(geometry_msgs::Pose& pose, visualization_msgs::Marker& marker) {
-            //TODO: correct rotation to align with the table!
-            pose.orientation = tf::createQuaternionMsgFromYaw(0.0);
+            float yaw = 0.0;
+            if(!demo_mode_) {
+                //get only yaw part of detected pose
+                yaw = tf::getYaw(pose.orientation);
+                try {
+                    XmlRpc::XmlRpcValue& val = objects_[marker.id].begin()->second;
+                    double x_off = val["tag_offset"]["x"];
+                    double y_off = val["tag_offset"]["y"];
+                    pose.position.x += x_off;
+                    pose.position.y += y_off;
+                } catch (XmlRpc::XmlRpcException& e) {
+                    ROS_WARN_STREAM("Error extracting values of object " << marker.id << " from configuration file!");
+                    ROS_WARN("%s", e.getMessage().c_str());
+                }
+            }
+            pose.orientation = tf::createQuaternionMsgFromYaw(yaw);
             pose.position.z = 0.5 * marker.scale.z;
             tf::Transform transform;
             tf::poseMsgToTF(pose, transform);

@@ -3,14 +3,20 @@
 objects:
   - object:
       type: CUBE
+      tag_id: 201
+      tag_offset: {x: 0.0, y: 0.0, z: 0.025}
       scale: {x: 0.05, y: 0.1, z: 0.05}
       tags: [11, 12, 13]
   - object:
       type: SPHERE
+      tag_id: 202
+      tag_offset: {x: 0.0, y: 0.0, z: 0.0}
       scale: {x: 0.1, y: 0.1, z: 0.1}
       tags: [21, 22, 23]
   - object:
       type: CYLINDER
+      tag_id: 203
+      tag_offset: {x: 0.0, y: 0.0, z: 0.0}
       scale: {x: 0.1, y: 0.1, z: 0.1}
       tags: [31, 32, 33]
 #  - object:
