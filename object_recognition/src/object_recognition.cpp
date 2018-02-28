@@ -12,6 +12,13 @@
 std::string MARKER_TOPIC = "pushable_objects";
 std::string MARKER_NAMESPACE = "pushable_objects";
 
+namespace{
+void interpolateTransforms(const tf::Transform& t1, const tf::Transform& t2, double fraction, tf::Transform& t_out) {
+    t_out.setOrigin( t1.getOrigin()*(1-fraction) + t2.getOrigin()*fraction );
+    t_out.setRotation( t1.getRotation().slerp(t2.getRotation(), fraction) );
+}
+}
+
 class ObjectRecognitionNode {
     private:
         ros::NodeHandle nh_;
@@ -40,6 +47,7 @@ class ObjectRecognitionNode {
 
         XmlRpc::XmlRpcValue objects_;
 
+        bool knows_transform_ = false;
     public:
         ObjectRecognitionNode() : initialized_(false) {
             if(!initialized_) {
@@ -59,9 +67,10 @@ class ObjectRecognitionNode {
                     visualization_msgs::Marker marker;
                     if(createObjectMarker(0, marker)) {
                         geometry_msgs::Pose pose;
-                        tf::StampedTransform transform = createNormalizedTransform(pose, marker);
+                        tf::Transform transform = createNormalizedTransform(pose, marker);
                         ros::Rate rate(20);
                         while(ros::ok()) {
+                            detection_time_ = ros::Time(0);
                             publishTransformAndMarker(transform, marker);
                             rate.sleep();
                         }
@@ -90,33 +99,41 @@ class ObjectRecognitionNode {
             //ph_.param<double>("timeout", timeout_, 10);
         }
 
-        void publishTransformAndMarker(tf::StampedTransform& transform, visualization_msgs::Marker& marker) {
-            transform.stamp_ = ros::Time::now();
-            tf_broadcaster_.sendTransform(transform);
+        void publishTransformAndMarker(tf::Transform& transform, visualization_msgs::Marker& marker) {
+            tf_broadcaster_.sendTransform(tf::StampedTransform(transform, detection_time_, "/table_top", object_frame_prefix_ + std::to_string(marker.id)));
             marker_pub_.publish(marker);
         }
 
-        void onDetectAprilTags(const apriltags_ros::AprilTagDetectionArray& msg){
-            for(apriltags_ros::AprilTagDetection detection : msg.detections) {
-		ROS_ERROR_STREAM("Detected april tag nr: " << detection.id);
-                if(detection.id == object_tag_id_) {
-                    // create marker
-                    visualization_msgs::Marker marker;
-                    if(createObjectMarker(object_id_, marker)) {
-                        // extract transform from pose
-                        detection_time_ = detection.pose.header.stamp;
-                        geometry_msgs::PoseStamped pose = detection.pose;
-			pose.header.stamp = ros::Time(0);
-                        tf_listener_.transformPose("/table_top", pose, pose);
-                        tf::StampedTransform transform = createNormalizedTransform(pose.pose, marker);
-                        publishTransformAndMarker(transform, marker);
-                        break;
-                    } else {
-                        ROS_WARN_STREAM("Failed to create marker for object " << object_id_ << "!");
-                    }
-                }
-            }
-        }
+	void onDetectAprilTags(const apriltags_ros::AprilTagDetectionArray& msg){
+		for(apriltags_ros::AprilTagDetection detection : msg.detections) {
+			ROS_ERROR_STREAM("Detected april tag nr: " << detection.id);
+			if(detection.id == object_tag_id_) {
+				// create marker
+				visualization_msgs::Marker marker;
+				if(createObjectMarker(object_id_, marker)) {
+					// extract transform from pose
+					detection_time_ = detection.pose.header.stamp;
+					geometry_msgs::PoseStamped pose = detection.pose;
+					pose.header.stamp = ros::Time(0);
+					try{
+						tf_listener_.transformPose("/table_top", pose, pose);
+                        if(knows_transform_) {
+                            interpolateTransforms(object_transform_, createNormalizedTransform(pose.pose, marker), 0.5, object_transform_);
+                        } else {
+						    object_transform_ = createNormalizedTransform(pose.pose, marker);
+                            knows_transform_ = true;
+                        }
+						publishTransformAndMarker(object_transform_, marker);
+					}
+					catch(...){
+						ROS_WARN_STREAM_THROTTLE(10, "Waiting for table_top->" << pose.header.frame_id << " transform");
+					}
+				} else {
+					ROS_WARN_STREAM("Failed to create marker for object " << object_id_ << "!");
+				}
+			}
+		}
+	}
 
         bool createObjectMarker(int object_id, visualization_msgs::Marker& marker) {
             marker.header.frame_id = object_frame_prefix_ + std::to_string(object_id);
@@ -163,7 +180,7 @@ class ObjectRecognitionNode {
             return true;
         }
 
-        tf::StampedTransform createNormalizedTransform(geometry_msgs::Pose& pose, visualization_msgs::Marker& marker) {
+        tf::Transform createNormalizedTransform(geometry_msgs::Pose& pose, visualization_msgs::Marker& marker) {
             float yaw = 0.0;
             if(!demo_mode_) {
                 //get only yaw part of detected pose
@@ -183,7 +200,8 @@ class ObjectRecognitionNode {
             pose.position.z = 0.5 * marker.scale.z;
             tf::Transform transform;
             tf::poseMsgToTF(pose, transform);
-            return tf::StampedTransform(transform, detection_time_, "/table_top", object_frame_prefix_ + std::to_string(marker.id));
+            //return tf::StampedTransform(transform, detection_time_, "/table_top", object_frame_prefix_ + std::to_string(marker.id));
+            return transform;
         }
 };
 
