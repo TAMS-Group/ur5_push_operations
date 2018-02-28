@@ -55,6 +55,7 @@ namespace tams_ur5_push_execution
 			moveit_msgs::CollisionObject obj_;
 
 			visualization_msgs::Marker marker_;
+			ros::Time marker_stamp_;
 
 			const bool execute_plan_;
 
@@ -78,6 +79,10 @@ namespace tams_ur5_push_execution
 
 			void performRandomPush() {
 				if(!marker_.header.frame_id.empty()) {
+					if(ros::Time(0) - marker_stamp_ > ros::Duration(0.5)) {
+						ROS_WARN_THROTTLE(10, "Marker not up to date, skipping push");
+						return;
+					}
 					// create push message
 					Push push;
 					createRandomPushMsg(push);
@@ -342,6 +347,7 @@ namespace tams_ur5_push_execution
 				if(marker_.id != marker.id && createCollisionObject(marker)) {
 					marker_ = marker;
 				}
+				marker_stamp_ = marker.header.stamp;
 			}
 
 			bool createCollisionObject(visualization_msgs::Marker& marker) {
