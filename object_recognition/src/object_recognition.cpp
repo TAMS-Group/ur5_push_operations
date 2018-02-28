@@ -98,6 +98,7 @@ class ObjectRecognitionNode {
 
         void onDetectAprilTags(const apriltags_ros::AprilTagDetectionArray& msg){
             for(apriltags_ros::AprilTagDetection detection : msg.detections) {
+		ROS_ERROR_STREAM("Detected april tag nr: " << detection.id);
                 if(detection.id == object_tag_id_) {
                     // create marker
                     visualization_msgs::Marker marker;
@@ -105,6 +106,7 @@ class ObjectRecognitionNode {
                         // extract transform from pose
                         detection_time_ = detection.pose.header.stamp;
                         geometry_msgs::PoseStamped pose = detection.pose;
+			pose.header.stamp = ros::Time(0);
                         tf_listener_.transformPose("/table_top", pose, pose);
                         tf::StampedTransform transform = createNormalizedTransform(pose.pose, marker);
                         publishTransformAndMarker(transform, marker);
@@ -165,7 +167,7 @@ class ObjectRecognitionNode {
             float yaw = 0.0;
             if(!demo_mode_) {
                 //get only yaw part of detected pose
-                yaw = tf::getYaw(pose.orientation);
+                yaw = tf::getYaw(pose.orientation) + 0.5*M_PI;
                 try {
                     XmlRpc::XmlRpcValue& val = objects_[marker.id].begin()->second;
                     double x_off = val["tag_offset"]["x"];
