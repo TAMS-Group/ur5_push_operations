@@ -193,7 +193,7 @@ namespace tams_ur5_push_execution
                     Eigen::Affine3d direction(Eigen::AngleAxis<double>(push.approach.angle, Eigen::Vector3d::UnitZ()));
 
                     // approach point
-                    Eigen::Affine3d approach_affine;
+                    Eigen::Affine3d approach_affine(Eigen::Affine3d::Identity());
                     geometry_msgs::Pose pose;
                     pose.position = push.approach.point;
                     pose.orientation = push.approach.normal;
