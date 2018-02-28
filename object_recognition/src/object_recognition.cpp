@@ -85,6 +85,7 @@ class ObjectRecognitionNode {
                     while(ros::ok()) {
                         if(knows_transform_) {
                             interpolateTransforms(transform_, new_transform_, 0.5, transform_);
+                            marker_.header.stamp = ros::Time(0);
                             publishTransformAndMarker(transform_, marker_);
                         }
                         rate.sleep();
@@ -145,6 +146,7 @@ class ObjectRecognitionNode {
         bool createObjectMarker(int object_id, visualization_msgs::Marker& marker) {
             marker.header.frame_id = object_frame_prefix_ + std::to_string(object_id);
             marker.header.stamp = ros::Time();
+            marker.lifetime = ros::Duration(1);
             marker.ns = MARKER_NAMESPACE;
             marker.id = object_id;
             marker.action = visualization_msgs::Marker::ADD;
