@@ -1,11 +1,17 @@
 # Defenitions of training objects
 # object type is one of CUBE, SPHERE, CYLIINDER, MESH
 objects:
+  #- object:
+  #    type: CUBE
+  #    tag_id: 331
+  #    tag_offset: {x: 0.0, y: 0.0, z: 0.025}
+  #    scale: {x: 0.05, y: 0.1, z: 0.05}
+  #    tags: [11, 12, 13]
   - object:
       type: CUBE
-      tag_id: 201
-      tag_offset: {x: 0.0, y: 0.0, z: 0.025}
-      scale: {x: 0.05, y: 0.1, z: 0.05}
+      tag_id: 352
+      tag_offset: {x: 0.0, y: 0.0, z: 0.056}
+      scale: {x: 0.162, y: 0.23, z: 0.112}
       tags: [11, 12, 13]
   - object:
       type: SPHERE
