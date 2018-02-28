@@ -223,7 +223,7 @@ namespace tams_ur5_push_execution
                     waypoint.orientation = orientation;
                     waypoints.push_back(waypoint);
 
-                    wp.translate(Eigen::Vector3d(-push.distance, 0.0, 0.1));
+                    wp.translate(Eigen::Vector3d(-push.distance, 0.0, 0.2));
                     tf::poseEigenToMsg(approach_affine * wp, waypoint);
                     waypoint.orientation = orientation;
                     waypoints.push_back(waypoint);
