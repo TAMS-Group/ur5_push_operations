@@ -1,5 +1,3 @@
-#include <algorithm>
-
 #include <ros/ros.h>
 
 #include <moveit/move_group_interface/move_group_interface.h>
@@ -17,20 +15,19 @@
 #include <visualization_msgs/Marker.h>
 
 #include <ur5_pusher/pusher.h>
+#include <ur5_pusher/push_approach_sampler.h>
+
 #include <tams_ur5_push_execution/Push.h>
 #include <tams_ur5_push_execution/PushApproach.h>
 
-std::random_device rd;
-std::mt19937 gen{rd()};
-
 std::string MARKER_TOPIC = "/pushable_objects";
 
-float MIN_TABLE_DISTANCE = 0.02;
-float WORKABLE_TIP_LENGTH = 0.08;
+const float MIN_TABLE_DISTANCE = 0.02;
+const float WORKABLE_TIP_LENGTH = 0.08;
 
 // Range to restrict the object on the table
-float SAFETY_RANGE = 0.15; // Outside of this range the object is pushed towards the center
-float EMERGENCY_RANGE = 0.3; // Outside of this range the experiment is aborted
+const float SAFETY_RANGE = 0.15; // Outside of this range the object is pushed towards the center
+const float EMERGENCY_RANGE = 0.3; // Outside of this range the experiment is aborted
 
 
 namespace tams_ur5_push_execution
@@ -49,6 +46,7 @@ namespace tams_ur5_push_execution
 			planning_scene::PlanningSceneConstPtr scene_;
 
 			ur5_pusher::Pusher& pusher_;
+			ur5_pusher::PushApproachSampler push_sampler_;
 
 			tf::TransformListener tf_listener_;
 
@@ -62,7 +60,7 @@ namespace tams_ur5_push_execution
 			bool first_attempt_ = true;
 
 		public:
-			PushExecution(ur5_pusher::Pusher& pusher, bool execute_plan=false) : pusher_(pusher), execute_plan_(execute_plan){
+			PushExecution(ur5_pusher::Pusher& pusher, bool execute_plan=false) : pusher_(pusher), execute_plan_(execute_plan), push_sampler_(SAFETY_RANGE, EMERGENCY_RANGE, MIN_TABLE_DISTANCE, WORKABLE_TIP_LENGTH){
 
 				nh_ = (*new ros::NodeHandle());
 				pnh_ = (*new ros::NodeHandle("~"));
@@ -71,6 +69,8 @@ namespace tams_ur5_push_execution
 
 				pusher_.setPlanningTime(5.0);
 				pusher_.setPlannerId("RRTConnectkConfigDefault");
+
+				push_sampler_.setReferenceFrame("/table_top");
 
 				marker_sub_ = nh_.subscribe(MARKER_TOPIC, 1, &PushExecution::onDetectObjects, this);
 				contact_point_pub_ = nh_.advertise<visualization_msgs::Marker>("/push_approach", 0);
@@ -100,7 +100,7 @@ namespace tams_ur5_push_execution
 					if(computeCartesianPushTraj(push, push_plan.trajectory_, start_state)) {
 
 						// move to pre_push pose on first attempt
-						if(execute_plan_ && first_attempt_) {
+						if(execute_plan_) {
 							// apply collision object before moving to pre_push
 							psi_.applyCollisionObject(obj_);
 							pusher_.setJointValueTarget(start_state);
@@ -124,30 +124,20 @@ namespace tams_ur5_push_execution
 
 			void createRandomPushMsg(Push& push) {
 				push.mode = Push::LINEAR;
-				push.approach = sampleRandomPushApproach();
+				push_sampler_.setMarker(marker_);
+				push.approach = push_sampler_.sampleRandomPushApproach();
+				visualizePushApproach(push.approach);
 				push.distance = 0.05;
 			}
 
-			PushApproach sampleRandomPushApproach() {
-				PushApproach approach;
-				approach.frame_id = marker_.header.frame_id;
 
-				geometry_msgs::Pose approach_pose;
-				double angle = 0.0;
-				sampleApproachPoseAndAngle(marker_, approach_pose, angle);
-				approach.angle = angle;
-
-				//geometry_msgs::Pose approach_pose = 
-				//    sampleRandomPointFromBox(marker_.scale.x, marker_.scale.y, marker_.scale.z);
-				//approach.angle = sampleRandomPushAngle();
-
-				approach.point = approach_pose.position;
-				approach.normal = approach_pose.orientation;
-
-				// visualize contact point with arrow marker
-				visualizePushApproach(approach.frame_id, approach_pose, approach.angle);
-				return approach;
+			void visualizePushApproach(const PushApproach& approach) {
+				geometry_msgs::Pose pose;
+				pose.position = approach.point;
+				pose.orientation = approach.normal;
+				visualizePushApproach(approach.frame_id, pose, approach.angle);
 			}
+
 
 			void visualizePushApproach(std::string frame_id, geometry_msgs::Pose pose, double angle, int id=0) {
 				visualization_msgs::Marker approach;
@@ -215,12 +205,7 @@ namespace tams_ur5_push_execution
 					orientation.w = 1.0;
 
 					Eigen::Affine3d wp(Eigen::Affine3d::Identity()); // instantiate as identity transform!!!
-					wp.translate(Eigen::Vector3d(-approach_distance, 0.0, retreat_height));
-					tf::poseEigenToMsg(approach_affine * wp, waypoint);
-					waypoint.orientation = orientation;
-					waypoints.push_back(waypoint);
-
-					wp.translate(Eigen::Vector3d(0.0, 0.0, -retreat_height));
+					wp.translate(Eigen::Vector3d(-approach_distance, 0.0, 0.0));
 					tf::poseEigenToMsg(approach_affine * wp, waypoint);
 					waypoint.orientation = orientation;
 					waypoints.push_back(waypoint);
@@ -251,96 +236,6 @@ namespace tams_ur5_push_execution
 					}
 				}
 				return false;
-			}
-
-			bool sampleApproachPoseAndAngle(visualization_msgs::Marker& marker, geometry_msgs::Pose& pose, double& angle, int attempts=100) {
-				geometry_msgs::PoseStamped object_pose, marker_pose;
-				marker_pose.pose = marker.pose;
-				marker_pose.header.frame_id = marker.header.frame_id;
-				tf_listener_.transformPose("/table_top", marker_pose, object_pose);
-				float distance = std::sqrt(std::pow(object_pose.pose.position.x,2) + std::pow(object_pose.pose.position.y,2));
-				if(distance < SAFETY_RANGE) {
-					pose = sampleRandomPointFromBox(marker_.scale.x, marker_.scale.y, marker_.scale.z);
-					angle = sampleRandomPushAngle();
-					return true;
-				}
-				if(distance < EMERGENCY_RANGE) {
-					ROS_WARN("Object outside of SAFETY RANGE. Sampling for pushes towards table center!");
-					tf::Vector3 table_vec;
-					object_pose.pose.position.z = 0.0;
-					tf::pointMsgToTF(object_pose.pose.position, table_vec);
-					table_vec = -table_vec;
-
-					tf::Quaternion obj_orientation;
-					tf::Quaternion push_normal;
-					tf::Quaternion push_direction;
-					push_direction.setRPY(0.0, 0.0, angle);
-					tf::quaternionMsgToTF(object_pose.pose.orientation, obj_orientation);
-					tf::Vector3 push_vec(1,0,0);
-
-					for(int i = 0; i < attempts; i++) {
-						pose = sampleRandomPointFromBox(marker_.scale.x, marker_.scale.y, marker_.scale.z);
-						angle = sampleRandomPushAngle();
-						tf::quaternionMsgToTF(pose.orientation, push_normal);
-						tf::Vector3 push_vec(1,0,0);
-						push_vec = tf::quatRotate(obj_orientation * push_normal * push_direction, push_vec);
-						double angle_limit = 20.0 / 180.0 * M_PI;
-						double angle_towards_table = table_vec.angle(push_vec);
-						if(angle_towards_table < angle_limit || angle_towards_table > (2*M_PI - angle_limit)) {
-							return true;
-						}
-					}
-					ROS_ERROR_STREAM("Push experiment aborted! Could not sample valid push pose in " << attempts << " attempts!");
-				}  else {
-					ROS_ERROR_STREAM("Push experiment aborted! Object is outside of safety range.");
-				}
-				return false;
-			}
-
-			/**
-			 * Sample random contact point from box dimensions
-			 */
-			geometry_msgs::Pose sampleRandomPointFromBox(double dim_x, double dim_y, double dim_z) {
-				geometry_msgs::Pose pose;
-				// Pick random value in range of perimeter
-				std::uniform_real_distribution<> dis(0.0, 2 * (dim_x + dim_y));
-				double p = dis(gen);
-				// Match value with edge and create corresponding pose
-				if(p <= dim_x) {
-					pose.position.x = p;
-					pose.position.y = 0;
-					pose.orientation = tf::createQuaternionMsgFromYaw(0.5*M_PI);
-				} else if (p <= dim_x + dim_y) {
-					pose.position.x = dim_x;
-					pose.position.y = p - dim_x;
-					pose.orientation = tf::createQuaternionMsgFromYaw(M_PI);
-				} else if (p <= 2 * dim_x + dim_y) {
-					pose.position.x = 2 * dim_x + dim_y - p;
-					pose.position.y = dim_y;
-					pose.orientation = tf::createQuaternionMsgFromYaw(1.5*M_PI);
-				} else {
-					pose.position.x = 0;
-					pose.position.y = 2 * (dim_x + dim_y) - p;
-					pose.orientation = tf::createQuaternionMsgFromYaw(0.0);
-				}
-				// adjust to center
-				pose.position.x -= 0.5*dim_x;
-				pose.position.y -= 0.5*dim_y;
-
-				// Pose height is related to box height and tip length
-				// By default the tip aligns with the frame of the box.
-				// The tip must be lifted in two mutually exclusive cases:
-				// 1. The box is too small and therefore the table distance too short.
-				pose.position.z = std::max(MIN_TABLE_DISTANCE - 0.5 * dim_z, 0.0);
-				// 2. The box is too high for the tip and might touch the gripper
-				pose.position.z = std::max(0.5 * dim_z - WORKABLE_TIP_LENGTH, pose.position.z);
-				return pose;
-			}
-
-			float sampleRandomPushAngle(int degrees=30) {
-				float range = M_PI * degrees / 180.0;
-				std::normal_distribution<> d{0,0.5};
-				return std::max(-range, std::min(range, (float)d(gen)));
 			}
 
 			void onDetectObjects(visualization_msgs::Marker marker) {
