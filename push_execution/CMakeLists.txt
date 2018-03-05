@@ -46,9 +46,10 @@ include_directories(
 )
 
 add_library(ur5_pusher src/pusher.cpp)
+add_library(push_approach_sampler src/push_approach_sampler.cpp)
 
 add_executable(push_execution src/push_execution.cpp)
-target_link_libraries(push_execution ${catkin_LIBRARIES} ur5_pusher)
+target_link_libraries(push_execution ${catkin_LIBRARIES} ur5_pusher push_approach_sampler)
 
 ## Declare a C++ library
 add_executable(pusher src/pusher.cpp)
