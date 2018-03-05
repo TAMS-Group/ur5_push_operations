@@ -174,6 +174,8 @@ void printHelp() {
 	std::cout << COMMAND_MAINTENANCE << " - move to maintenance pose" << std::endl;
 	std::cout << COMMAND_GRIPPER_OPEN << " - open gripper" << std::endl;
 	std::cout << COMMAND_GRIPPER_CLOSE << " - close gripper" << std::endl;
+	std::cout << COMMAND_PUSHER_ATTACH << " - attach pusher" << std::endl;
+	std::cout << COMMAND_PUSHER_DETACH << " - detach pusher" << std::endl;
 	std::cout << COMMAND_DEMO << " - run demo" << std::endl;
 	std::cout << COMMAND_HELP << " - show help screen" << std::endl;
 	std::cout << COMMAND_QUIT << " - quit program" << std::endl;
