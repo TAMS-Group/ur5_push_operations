@@ -88,11 +88,8 @@ namespace ur5_pusher
 		    return false;
 	    }
 	    
-	    // investigate attached collision objects
-	    std::map<std::string, moveit_msgs::AttachedCollisionObject> object_map = psi_.getAttachedObjects();
-	    if(object_map.size() == 1) { // only a single object is allowed
-		    std::map<std::string, moveit_msgs::AttachedCollisionObject>::iterator object_iterator = object_map.begin();
-		    moveit_msgs::AttachedCollisionObject pusher = object_iterator->second;
+	    moveit_msgs::AttachedCollisionObject pusher;
+	    if(getSingleAttachedObject(pusher)) { // only a single object is allowed
 
 		    // check if mesh poses are used
 		    if(pusher.object.mesh_poses.size() == 0) {
@@ -122,17 +119,34 @@ namespace ur5_pusher
 		    ROS_INFO("Pusher successfully loaded from attached collision object!");
 		    return true;
 
-	    } else if(object_map.empty()) {
-		    ROS_ERROR("Unable to load pusher since no attached collision objects can be found!");
-	    } else {
-		    ROS_ERROR("Unable to load pusher since there is more than one collision object attached!");
+        }
+        ROS_ERROR("Unable to load pusher since the number of attached collion objects is not 1!");
+        return false;
+    }
+
+    bool Pusher::hasSingleAttachedObject()
+    {
+        moveit_msgs::AttachedCollisionObject pusher_object;
+	    return getSingleAttachedObject(pusher_object);
+    }
+
+    bool Pusher::getSingleAttachedObject(moveit_msgs::AttachedCollisionObject& pusher_object)
+    {
+	    // investigate attached collision objects
+	    std::map<std::string, moveit_msgs::AttachedCollisionObject> object_map = psi_.getAttachedObjects();
+	    if(object_map.size() == 1) { // only a single object is allowed
+		    pusher_object = object_map.begin()->second;
+		    return true;
 	    }
 	    return false;
     }
 
-    bool Pusher::isPusherAttached() const
+    bool Pusher::isPusherAttached()
     {
-        return pusher_attached_;
+	    if(pusher_attached_ && !hasSingleAttachedObject()) {
+		    detachPusher();
+	    }
+	    return pusher_attached_;
     }
 
     bool Pusher::knowsPusher() const
@@ -156,8 +170,13 @@ namespace ur5_pusher
     bool Pusher::detachPusher()
     {
         if(pusher_attached_) {
-            pusher_object_.object.operation = moveit_msgs::CollisionObject::REMOVE;
-            psi_.applyAttachedCollisionObject(pusher_object_);
+
+            //pusher_object_.object.operation = moveit_msgs::CollisionObject::REMOVE;
+            //psi_.applyAttachedCollisionObject(pusher_object_);
+
+            std::vector<std::string> object_ids;
+            object_ids.push_back(pusher_object_.object.id);
+            psi_.removeCollisionObjects(object_ids);
             pusher_attached_ = false;
             return true;
         } 

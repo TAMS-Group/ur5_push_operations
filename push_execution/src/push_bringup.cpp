@@ -18,25 +18,39 @@
 #include <Eigen/Geometry>
 
 #include <ur5_pusher/pusher.h>
+#include <tams_ur5_push_execution/PerformRandomPush.h>
 
-std::string COMMAND_MAINTENANCE = "m";
-std::string COMMAND_GRIPPER_OPEN = "o";
-std::string COMMAND_GRIPPER_CLOSE = "c";
-std::string COMMAND_PUSHER_ATTACH = "pa";
-std::string COMMAND_PUSHER_DETACH = "pd";
-std::string COMMAND_DEMO = "r";
-std::string COMMAND_HELP = "h";
-std::string COMMAND_QUIT = "q";
+std::string COMMAND_MAINTENANCE = "maintenance";
+std::string COMMAND_GRIPPER_OPEN = "open";
+std::string COMMAND_GRIPPER_CLOSE = "close";
+std::string COMMAND_PUSHER_ATTACH = "attach";
+std::string COMMAND_PUSHER_DETACH = "detach";
+std::string COMMAND_DEMO = "demo";
+std::string COMMAND_PUSH = "push";
+std::string COMMAND_PUSH_NONSTOP = "push nonstop";
+std::string COMMAND_SET = "set";
+std::string COMMAND_UNSET = "unset";
+std::string COMMAND_HELP = "help";
+std::string COMMAND_QUIT = "quit";
 
+std::string FLAG_EXECUTE = "execute";
 
 class PushBringup
 {
+	private:
+		geometry_msgs::Quaternion orientation_down_ = tf::createQuaternionMsgFromRollPitchYaw(0.0, 0.5*M_PI, 0.0);
+		geometry_msgs::Quaternion orientation_up_ = tf::createQuaternionMsgFromRollPitchYaw(0.0, -0.5*M_PI, 0.0);
+		ur5_pusher::Pusher arm_;
+		moveit::planning_interface::MoveGroupInterface gripper_;
+		moveit::planning_interface::PlanningSceneInterface psi_;
+
+		ros::ServiceClient push_execution_client_;
+		ros::NodeHandle nh_;
+
+		bool execute_push_operations_ = false;
+
 	public:
-	geometry_msgs::Quaternion orientation_down_ = tf::createQuaternionMsgFromRollPitchYaw(0.0, 0.5*M_PI, 0.0);
-	geometry_msgs::Quaternion orientation_up_ = tf::createQuaternionMsgFromRollPitchYaw(0.0, -0.5*M_PI, 0.0);
-	ur5_pusher::Pusher arm_;
-	moveit::planning_interface::MoveGroupInterface gripper_;
-	moveit::planning_interface::PlanningSceneInterface psi_;
+
 
 
 		PushBringup() : arm_("arm"), gripper_("gripper"){
@@ -53,6 +67,8 @@ class PushBringup
 			tf::poseMsgToEigen(pose, transform);
 			arm_.setTouchLinks(gripper_.getLinkNames());
 			arm_.loadPusher(resource, transform, parent_link, "pusher0");
+
+			push_execution_client_ = nh_.serviceClient<tams_ur5_push_execution::PerformRandomPush>("push_execution");
 		};
 
 		bool moveToMaintenancePose() {
@@ -129,6 +145,10 @@ class PushBringup
 			arm_.detachPusher();
 		}
 
+		void setExecute(bool execute) {
+			execute_push_operations_ = execute;
+		}
+
 		void wait(float seconds) {
 			ros::Duration(seconds).sleep();
 		}
@@ -166,6 +186,28 @@ class PushBringup
 				return false;
 			}
 		}
+
+		bool performRandomPush()
+		{
+			tams_ur5_push_execution::PerformRandomPush srv;
+			srv.request.operation = tams_ur5_push_execution::PerformRandomPush::Request::OP_DEFAULT;
+			srv.request.execute = execute_push_operations_;
+			push_execution_client_.call(srv);
+			return srv.response.result;
+		}
+
+		bool performRandomPushNonstop(bool terminate)
+		{
+			tams_ur5_push_execution::PerformRandomPush srv;
+			if(terminate) {
+				srv.request.operation = tams_ur5_push_execution::PerformRandomPush::Request::OP_NONSTOP_TERMINATE;
+			} else {
+				srv.request.operation = tams_ur5_push_execution::PerformRandomPush::Request::OP_NONSTOP;
+			}
+			srv.request.execute = execute_push_operations_;
+			push_execution_client_.call(srv);
+			return srv.response.result;
+		}
 };
 
 void printHelp() {
@@ -177,6 +219,8 @@ void printHelp() {
 	std::cout << COMMAND_PUSHER_ATTACH << " - attach pusher" << std::endl;
 	std::cout << COMMAND_PUSHER_DETACH << " - detach pusher" << std::endl;
 	std::cout << COMMAND_DEMO << " - run demo" << std::endl;
+	std::cout << COMMAND_PUSH << " - perform single push movement" << std::endl;
+	std::cout << COMMAND_PUSH_NONSTOP << " - perform nonstop push movements" << std::endl;
 	std::cout << COMMAND_HELP << " - show help screen" << std::endl;
 	std::cout << COMMAND_QUIT << " - quit program" << std::endl;
 }
@@ -221,8 +265,23 @@ int main(int argc, char** argv) {
 		} else if (input == COMMAND_DEMO){
 			std::cout << "Running demo push movement." << std::endl;
 			pb.runDemoMovement(4);
-		} else if (input == COMMAND_HELP){
-			printHelp();
+		} else if (input == COMMAND_PUSH){
+			std::cout << "Perform random push movement." << std::endl;
+			pb.performRandomPush();
+		} else if (input == COMMAND_PUSH_NONSTOP){
+			std::cout << "Perform random push movement nonstop!" << std::endl;
+			if(pb.performRandomPushNonstop(false)) {
+				std::cout << "To terminate this operation, press <Enter>" << std::endl;
+				std::getline(std::cin, input);
+				pb.performRandomPushNonstop(true);
+				std::cout << "Nonstop push operations terminated by user!" << std::endl;
+			} else {
+				std::cout << "Service failed to perform nonstop push operations!" << std::endl;
+			}
+		} else if (input == COMMAND_SET + " " + FLAG_EXECUTE){
+			pb.setExecute(true);
+		} else if (input == COMMAND_UNSET + " " + FLAG_EXECUTE){
+			pb.setExecute(true);
 		} else if (input == COMMAND_QUIT){
 			std::cout << "Bye!" << std::endl;
 			break;

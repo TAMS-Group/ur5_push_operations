@@ -21,9 +21,6 @@
 
 #include <visualization_msgs/Marker.h>
 
-#include <tams_ur5_push_execution/Push.h>
-#include <tams_ur5_push_execution/PushApproach.h>
-
 #pragma once
 
 namespace ur5_pusher
@@ -50,6 +47,10 @@ class Pusher : public moveit::planning_interface::MoveGroupInterface
 		moveit_msgs::AttachedCollisionObject getPusherObjectMsg(const shape_msgs::Mesh& mesh_msg, const geometry_msgs::Pose& pose_msg) const;
 		void importMeshFromResource(const std::string& resource, shape_msgs::Mesh& mesh_msg, float scale) const;
 
+		bool getSingleAttachedObject(moveit_msgs::AttachedCollisionObject& object);
+
+		bool hasSingleAttachedObject();
+
 	public:
 		Pusher(const std::string& group_name);
 
@@ -69,7 +70,7 @@ class Pusher : public moveit::planning_interface::MoveGroupInterface
 
 		bool loadFromAttachedObject();
 
-		bool isPusherAttached() const;
+		bool isPusherAttached();
 
 		bool knowsPusher() const;
 

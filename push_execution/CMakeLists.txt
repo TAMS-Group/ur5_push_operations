@@ -26,6 +26,11 @@ add_message_files(
 	Push.msg
 )
 
+add_service_files(
+	FILES
+	PerformRandomPush.srv
+)
+
 generate_messages(
 	DEPENDENCIES
 	geometry_msgs
@@ -47,16 +52,15 @@ include_directories(
 
 add_library(ur5_pusher src/pusher.cpp)
 add_library(push_approach_sampler src/push_approach_sampler.cpp)
+add_dependencies(push_approach_sampler ${${PROJECT_NAME}_EXPORTED_TARGETS})
 
 add_executable(push_execution src/push_execution.cpp)
 target_link_libraries(push_execution ${catkin_LIBRARIES} ur5_pusher push_approach_sampler)
+add_dependencies(push_execution ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## Declare a C++ library
-add_executable(pusher src/pusher.cpp)
-target_link_libraries(pusher ${catkin_LIBRARIES})
-
 add_executable(push_bringup src/push_bringup.cpp)
 target_link_libraries(push_bringup ${catkin_LIBRARIES} ur5_pusher)
-#add_dependencies(push_bringup ${${PROJECT_NAME}_EXPORTED_TARGETS})
+add_dependencies(push_bringup ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 install(DIRECTORY include DESTINATION ${CATKIN_GLOBAL_INCLUDE_DESTINATION})

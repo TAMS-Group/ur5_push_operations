@@ -1,0 +1,8 @@
+int8 OP_DEFAULT=0
+int8 OP_NONSTOP=1
+int8 OP_NONSTOP_TERMINATE=2
+
+bool execute
+int8 operation
+---
+bool result
