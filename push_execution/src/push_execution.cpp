@@ -99,17 +99,19 @@ namespace tams_ur5_push_execution
                         // move to pre_push pose on first attempt
                         if(execute_plan) {
                             // apply collision object before moving to pre_push
-                            psi_.applyCollisionObject(obj_);
+                            std_msgs::ColorRGBA color;
+                            color.r = 0.5;
+                            color.a = 0.5;
+                            psi_.applyCollisionObject(obj_, color);
                             pusher.setJointValueTarget(start_state);
                             pusher.move();
-                            psi_.removeCollisionObjects(object_ids);
+                            ros::Duration(1.0).sleep();
                         }
 
                         if(execute_plan)
                             pusher.execute(push_plan);
 
                         // add collision object after run
-                        psi_.applyCollisionObject(obj_);
                         return true;
 
                     } else {
@@ -244,18 +246,21 @@ namespace tams_ur5_push_execution
                 marker_stamp_ = marker.header.stamp;
             }
 
-            bool createCollisionObject(visualization_msgs::Marker& marker) {
+            bool createCollisionObject(visualization_msgs::Marker& marker, float padding=0.025) {
                 if(marker.type == visualization_msgs::Marker::CUBE) {
                     obj_.id = marker.header.frame_id + "_collision";
+                    obj_.header.stamp = ros::Time(0);
                     obj_.header.frame_id = marker.header.frame_id;
                     obj_.primitive_poses.resize(1);
                     obj_.primitive_poses[0].orientation.w = 1;
+                    obj_.primitive_poses[0].position.z = 0.5 * padding;
                     obj_.primitives.resize(1);
+                    obj_.operation = moveit_msgs::CollisionObject::ADD;
                     obj_.primitives[0].type = shape_msgs::SolidPrimitive::BOX;
                     obj_.primitives[0].dimensions.resize(3);
-                    obj_.primitives[0].dimensions[shape_msgs::SolidPrimitive::BOX_X] = marker.scale.x;
-                    obj_.primitives[0].dimensions[shape_msgs::SolidPrimitive::BOX_Y] = marker.scale.y;
-                    obj_.primitives[0].dimensions[shape_msgs::SolidPrimitive::BOX_Z] = marker.scale.z;
+                    obj_.primitives[0].dimensions[shape_msgs::SolidPrimitive::BOX_X] = marker.scale.x + 2 * padding;
+                    obj_.primitives[0].dimensions[shape_msgs::SolidPrimitive::BOX_Y] = marker.scale.y + 2 * padding;
+                    obj_.primitives[0].dimensions[shape_msgs::SolidPrimitive::BOX_Z] = marker.scale.z + padding;
                     return true;
                 }
                 return false;

@@ -101,8 +101,6 @@ namespace ur5_pusher
 		    if(pusher.link_name != getEndEffectorLink()) {
 			    ROS_ERROR("Unable to use attached object as pusher since parent link is not the endeffector!");
 			    ROS_ERROR_STREAM("parent link: " << pusher.link_name << " - endeffector: " << getEndEffectorLink());
-
-
 			    return false;
 		    }
 
@@ -115,10 +113,11 @@ namespace ur5_pusher
 		    knows_pusher_ = true;
 		    pusher_attached_ = true;
 
+		    attachPusher();
+
 		    // pusher is successfully loaded
 		    ROS_INFO("Pusher successfully loaded from attached collision object!");
 		    return true;
-
         }
         ROS_ERROR("Unable to load pusher since the number of attached collion objects is not 1!");
         return false;
@@ -126,7 +125,7 @@ namespace ur5_pusher
 
     bool Pusher::hasSingleAttachedObject()
     {
-        moveit_msgs::AttachedCollisionObject pusher_object;
+	    moveit_msgs::AttachedCollisionObject pusher_object;
 	    return getSingleAttachedObject(pusher_object);
     }
 
@@ -145,6 +144,7 @@ namespace ur5_pusher
     {
 	    if(pusher_attached_ && !hasSingleAttachedObject()) {
 		    detachPusher();
+		    ROS_WARN("Pusher is supposed to be attached, but no attached object could be found!");
 	    }
 	    return pusher_attached_;
     }

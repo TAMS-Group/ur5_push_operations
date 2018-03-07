@@ -213,6 +213,7 @@ class PushBringup
 void printHelp() {
 	std::cout << std::endl;
 	std::cout << "========================================" << std::endl;
+	std::cout << COMMAND_SET << "/" << COMMAND_UNSET << " <flag> - define bool flags.\nAvailable flags are: " << FLAG_EXECUTE << "\n" << std::endl;
 	std::cout << COMMAND_MAINTENANCE << " - move to maintenance pose" << std::endl;
 	std::cout << COMMAND_GRIPPER_OPEN << " - open gripper" << std::endl;
 	std::cout << COMMAND_GRIPPER_CLOSE << " - close gripper" << std::endl;
