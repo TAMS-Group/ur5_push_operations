@@ -1,5 +1,7 @@
 <launch>
-	<include file="$(find tams_ur5_setup_moveit_config)/launch/demo.launch"/>
+	<include file="$(find tams_ur5_setup_moveit_config)/launch/demo.launch">
+		<arg name="ur5_joint_ranges_config" value="$(find ur5_push_setup)/config/elbow_up-restricted.yaml"/>
+	</include>
 
 	<include file="$(find object_recognition)/launch/object_recognition.launch">
 		<arg name="demo_mode" value="true"/>
