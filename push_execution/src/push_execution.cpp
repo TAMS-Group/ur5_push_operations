@@ -78,7 +78,9 @@ namespace tams_ur5_push_execution
                     }
 
                     pusher.setPlanningTime(5.0);
-                    pusher.setPlannerId("RRTConnectkConfigDefault");
+                    //pusher.setPlannerId("RRTConnectkConfigDefault");
+                    pusher.setPlannerId("RRTStarConfigDefault");
+
 
                     // create push message
                     Push push;
@@ -105,13 +107,11 @@ namespace tams_ur5_push_execution
                             psi_.applyCollisionObject(obj_, color);
                             pusher.setJointValueTarget(start_state);
                             pusher.move();
-                            ros::Duration(1.0).sleep();
+                            psi_.removeCollisionObjects(object_ids);
                         }
 
                         if(execute_plan)
                             pusher.execute(push_plan);
-
-                        // add collision object after run
                         return true;
 
                     } else {
@@ -221,20 +221,34 @@ namespace tams_ur5_push_execution
                     waypoint.orientation = orientation;
                     waypoints.push_back(waypoint);
 
+                    // start state to be set from IK
+                    geometry_msgs::PoseStamped ps;
+                    ps.pose = waypoints[0];
+                    ps.header.frame_id = "table_top";
+                    tf_listener_.transformPose(pusher.getPlanningFrame(), ps, ps);
+
                     //compute cartesian path
-                    pusher.setPoseReferenceFrame("table_top");
-                    pusher.setStartStateToCurrentState();
-                    double success_fraction = pusher.computeCartesianPushPath(waypoints, 0.05, 3, trajectory);
-                    if(success_fraction == 1.0) {
-                        trajectory_processing::IterativeParabolicTimeParameterization iptp;
-                        robot_trajectory::RobotTrajectory traj(pusher.getRobotModel(), pusher.getName());
-                        traj.setRobotTrajectoryMsg(state, trajectory);
-                        iptp.computeTimeStamps(traj, 0.2, 0.5);
-                        traj.getRobotTrajectoryMsg(trajectory);
-                        return true;
+                    if(pusher.setPusherJointValueTarget(ps)) {
+                        state = pusher.getJointValueTarget();
+                        pusher.setPoseReferenceFrame("table_top");
+                        pusher.setStartState(state);
+                        double success_fraction = pusher.computeCartesianPushPath(waypoints, 0.05, 3, trajectory);
+                        pusher.clearPoseTargets();
+                        pusher.setStartStateToCurrentState();
+                        if(success_fraction == 1.0) {
+                            trajectory_processing::IterativeParabolicTimeParameterization iptp;
+                            robot_trajectory::RobotTrajectory traj(pusher.getRobotModel(), pusher.getName());
+                            traj.setRobotTrajectoryMsg(state, trajectory);
+                            iptp.computeTimeStamps(traj, 0.5, 0.7);
+                            traj.getRobotTrajectoryMsg(trajectory);
+                            return true;
+                        } else {
+                            ROS_ERROR_STREAM("Could not plan cartesian push path. Achieved " << success_fraction * 100 << "%");
+                        }
                     } else {
-                        ROS_ERROR_STREAM("Could not plan cartesian push path. Achieved " << success_fraction * 100 << "%");
+                        ROS_WARN("Could not set start pose of push trajectory from IK!");
                     }
+                    pusher.setStartStateToCurrentState();
                 }
                 return false;
             }
@@ -246,7 +260,7 @@ namespace tams_ur5_push_execution
                 marker_stamp_ = marker.header.stamp;
             }
 
-            bool createCollisionObject(visualization_msgs::Marker& marker, float padding=0.025) {
+            bool createCollisionObject(visualization_msgs::Marker& marker, float padding=0.01) {
                 if(marker.type == visualization_msgs::Marker::CUBE) {
                     obj_.id = marker.header.frame_id + "_collision";
                     obj_.header.stamp = ros::Time(0);
