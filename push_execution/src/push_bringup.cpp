@@ -35,6 +35,9 @@ std::string COMMAND_QUIT = "quit";
 
 std::string FLAG_EXECUTE = "execute";
 
+std::vector<double> MAINTENANCE_POSITIONS;
+std::vector<std::string> JOINT_NAMES;
+
 class PushBringup
 {
 	private:
@@ -51,9 +54,8 @@ class PushBringup
 
 	public:
 
-
-
 		PushBringup() : arm_("arm"), gripper_("gripper"){
+			createMaintenanceState();
 			const std::string resource = "package://ur5_push_setup/meshes/pusher_2_aligned_x-binary.stl";
 			Eigen::Affine3d transform;
 			geometry_msgs::Pose pose;
@@ -71,9 +73,30 @@ class PushBringup
 			push_execution_client_ = nh_.serviceClient<tams_ur5_push_execution::PerformRandomPush>("push_execution");
 		};
 
+		void createMaintenanceState()
+		{
+			//TODO: extract values to config
+			MAINTENANCE_POSITIONS.push_back(-1.5708);
+			MAINTENANCE_POSITIONS.push_back(-3.1413);
+			MAINTENANCE_POSITIONS.push_back(0.0);
+			MAINTENANCE_POSITIONS.push_back(1.5708);
+			MAINTENANCE_POSITIONS.push_back(1.5708);
+			MAINTENANCE_POSITIONS.push_back(0.0);
+
+			JOINT_NAMES.push_back("ur5_shoulder_pan_joint");
+			JOINT_NAMES.push_back("ur5_shoulder_lift_joint");
+			JOINT_NAMES.push_back("ur5_elbow_joint");
+			JOINT_NAMES.push_back("ur5_wrist_1_joint");
+			JOINT_NAMES.push_back("ur5_wrist_2_joint");
+			JOINT_NAMES.push_back("ur5_wrist_3_joint");
+		}
+
+
 		bool moveToMaintenancePose() {
 			// move to initial pose
-			arm_.setNamedTarget("push_maintenance");
+			robot_state::RobotState state = (*arm_.getCurrentState());
+			state.setVariablePositions(JOINT_NAMES, MAINTENANCE_POSITIONS);
+			arm_.setJointValueTarget(state);
 			return bool(arm_.move());
 		}
 
