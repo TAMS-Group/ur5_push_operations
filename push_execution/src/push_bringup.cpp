@@ -16,9 +16,12 @@
 #include <geometric_shapes/shape_operations.h>
 #include <shape_msgs/Mesh.h>
 #include <Eigen/Geometry>
+#include <actionlib/client/simple_action_client.h>
+#include <actionlib/client/terminal_state.h>
 
 #include <ur5_pusher/pusher.h>
 #include <tams_ur5_push_execution/PerformRandomPush.h>
+#include <tams_ur5_push_execution/ExplorePushesAction.h>
 
 std::string COMMAND_MAINTENANCE = "maintenance";
 std::string COMMAND_GRIPPER_OPEN = "open";
@@ -231,6 +234,38 @@ class PushBringup
 			push_execution_client_.call(srv);
 			return srv.response.result;
 		}
+
+        static void doneCb(const actionlib::SimpleClientGoalState& state, 
+                    const tams_ur5_push_execution::ExplorePushesResultConstPtr& result)
+        {
+            ROS_INFO_STREAM("Done!");
+        }
+
+        static void activeCb()
+        {
+            ROS_INFO("Goal just went active");
+        }
+
+        static void feedbackCb(const tams_ur5_push_execution::ExplorePushesFeedbackConstPtr& feedback)
+        {
+            //ROS_INFO_STREAM("Successfull sample of push " << feedback->push << " with transform " << feedback->relocation);
+            std::cout << "Successfull sample of push " << feedback->push << " with transform " << feedback->relocation << std::endl;
+
+        }
+
+        bool performRandomPushAction()
+        {
+            actionlib::SimpleActionClient<tams_ur5_push_execution::ExplorePushesAction> ac("explore_pushes_action");
+            ac.waitForServer();
+
+            tams_ur5_push_execution::ExplorePushesGoal goal;
+            goal.samples = 100;
+            ac.sendGoal(goal, &doneCb, &activeCb, &feedbackCb);
+            ac.waitForResult();
+            ROS_INFO_STREAM("Explore Pushes finished collecting " << goal.samples << " samples with " << ac.getResult()->attempts << " attempts.");
+            ROS_INFO_STREAM("Total time elapsed: " << ac.getResult()->elapsed_time.toSec() << " seconds");
+            return true;
+        }
 };
 
 void printHelp() {
@@ -294,6 +329,8 @@ int main(int argc, char** argv) {
 			pb.performRandomPush();
 		} else if (input == COMMAND_PUSH_NONSTOP){
 			std::cout << "Perform random push movement nonstop!" << std::endl;
+            pb.performRandomPushAction();
+            /*
 			if(pb.performRandomPushNonstop(false)) {
 				std::cout << "To terminate this operation, press <Enter>" << std::endl;
 				std::getline(std::cin, input);
@@ -302,6 +339,7 @@ int main(int argc, char** argv) {
 			} else {
 				std::cout << "Service failed to perform nonstop push operations!" << std::endl;
 			}
+            */
 		} else if (input == COMMAND_SET + " " + FLAG_EXECUTE){
 			pb.setExecute(true);
 		} else if (input == COMMAND_UNSET + " " + FLAG_EXECUTE){
