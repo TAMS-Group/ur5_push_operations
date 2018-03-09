@@ -5,4 +5,3 @@ int8 ADAPTED=1
 int8 mode
 PushApproach approach
 float32 distance
-geometry_msgs/Point cor
