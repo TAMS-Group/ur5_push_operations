@@ -7,6 +7,7 @@ add_compile_options(-std=c++11)
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
+	actionlib
 	roscpp
 	geometry_msgs
 	std_msgs
@@ -19,6 +20,11 @@ find_package(catkin REQUIRED COMPONENTS
 	tf_conversions
 	eigen_conversions
 	message_generation)
+
+add_action_files(
+	DIRECTORY action 
+	FILES ExplorePushes.action
+)
 
 add_message_files(
 	FILES
@@ -34,6 +40,7 @@ add_service_files(
 generate_messages(
 	DEPENDENCIES
 	geometry_msgs
+	actionlib_msgs
 )
 
 catkin_package(INCLUDE_DIRS

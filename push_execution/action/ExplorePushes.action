@@ -1,0 +1,10 @@
+#goal
+int32 samples
+---
+#result
+int32 attempts
+duration elapsed_time
+---
+#feedback
+Push push
+geometry_msgs/Pose relocation
