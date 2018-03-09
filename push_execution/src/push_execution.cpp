@@ -10,6 +10,8 @@
 
 #include <tf/transform_listener.h>
 
+#include <actionlib/server/simple_action_server.h>
+
 #include <eigen_conversions/eigen_msg.h>
 
 #include <visualization_msgs/Marker.h>
@@ -20,6 +22,8 @@
 #include <tams_ur5_push_execution/Push.h>
 #include <tams_ur5_push_execution/PushApproach.h>
 #include <tams_ur5_push_execution/PerformRandomPush.h>
+#include <tams_ur5_push_execution/ExplorePushesAction.h>
+
 
 std::string MARKER_TOPIC = "/pushable_objects";
 
@@ -71,19 +75,17 @@ namespace tams_ur5_push_execution
             }
 
             bool performRandomPush(ur5_pusher::Pusher& pusher, bool execute_plan=false) {
+                return performRandomPush(pusher, execute_plan);
+            }
+
+            bool performRandomPush(ur5_pusher::Pusher& pusher, Push& push, geometry_msgs::Pose relocation, bool execute_plan=true) {
                 if(!marker_.header.frame_id.empty()) {
                     if(ros::Time(0) - marker_stamp_ > ros::Duration(0.5)) {
                         ROS_WARN_THROTTLE(10, "Marker not up to date, skipping push");
                         return false;
                     }
 
-                    pusher.setPlanningTime(5.0);
-                    //pusher.setPlannerId("RRTConnectkConfigDefault");
-                    pusher.setPlannerId("RRTStarConfigDefault");
-
-
                     // create push message
-                    Push push;
                     createRandomPushMsg(push);
 
                     //remove collision object in case the last attempt failed
@@ -100,18 +102,27 @@ namespace tams_ur5_push_execution
 
                         // move to pre_push pose on first attempt
                         if(execute_plan) {
+
                             // apply collision object before moving to pre_push
                             std_msgs::ColorRGBA color;
                             color.r = 0.5;
                             color.a = 0.5;
                             psi_.applyCollisionObject(obj_, color);
                             pusher.setJointValueTarget(start_state);
+
+                            // Move to Pre-Push and allow object collision
                             pusher.move();
                             psi_.removeCollisionObjects(object_ids);
-                        }
 
-                        if(execute_plan)
+                            // Get Pre-push pose of object
+                            Eigen::Affine3d obj_pose = getObjectTransform(push.approach.frame_id);
+
+                            // Execute Push
                             pusher.execute(push_plan);
+
+                            // Observe Relocation
+                            tf::poseEigenToMsg(obj_pose.inverse() * getObjectTransform(push.approach.frame_id), relocation);
+                        }
                         return true;
 
                     } else {
@@ -171,6 +182,17 @@ namespace tams_ur5_push_execution
                 approach.color.r = 1.0;
                 approach.lifetime = ros::Duration(5);
                 contact_point_pub_.publish(approach);
+            }
+
+            Eigen::Affine3d getObjectTransform(const std::string& obj_frame, const std::string& target_frame="table_top")
+            {
+                geometry_msgs::PoseStamped obj_pose;
+                obj_pose.header.frame_id = obj_frame;
+                obj_pose.pose.orientation.w = 1.0;
+                tf_listener_.transformPose(target_frame, obj_pose, obj_pose);
+                Eigen::Affine3d obj_pose_affine;
+                tf::poseMsgToEigen(obj_pose.pose, obj_pose_affine);
+                return obj_pose_affine;
             }
 
             bool computeCartesianPushTraj(ur5_pusher::Pusher& pusher, tams_ur5_push_execution::Push& push, moveit_msgs::RobotTrajectory& trajectory, robot_state::RobotState& state) {
@@ -287,6 +309,8 @@ namespace tams_ur5_push_execution
             PushExecution* push_execution_;
             ros::ServiceServer service_;
 
+            actionlib::SimpleActionServer<ExplorePushesAction> as_;
+
             ur5_pusher::Pusher pusher_;
 
             bool service_busy_ = false;
@@ -306,6 +330,49 @@ namespace tams_ur5_push_execution
                     ROS_INFO("Performing random push");
                     return push_execution_->performRandomPush(pusher_, execute);
 
+            }
+
+            void goalCB()
+            {
+                ExplorePushesGoal goal = (*as_.acceptNewGoal());
+                ExplorePushesFeedback feedback;
+                ExplorePushesResult result;
+                if(!service_busy_ && isPusherAvailable()) {
+                    service_busy_ = true;
+                    ros::Time start_time = ros::Time::now();
+                    result.attempts = 0;
+                    int success_count = 0;
+                    while (goal.samples==0 || success_count < goal.samples) {
+
+                        // cancel run if aborted
+                        if(!as_.isActive()) {
+                            service_busy_ = false;
+                            return;
+                        }
+
+                        // perform new attempt and publish feedback
+                        result.attempts++;
+                        if(push_execution_->performRandomPush(pusher_, feedback.push, feedback.relocation)) {
+                            as_.publishFeedback(feedback);
+                            success_count++;
+                        }
+                    }
+
+                    //send result with elapsed time
+                    result.elapsed_time = ros::Time::now() - start_time;
+                    as_.setSucceeded(result);
+
+                } else {
+                    // abort since service is not available
+                    result.attempts = 0;
+                    as_.setAborted(result);
+                }
+                service_busy_ = false;
+            }
+
+            void preemptCB()
+            {
+                as_.setPreempted();
             }
 
         public:
@@ -352,13 +419,19 @@ namespace tams_ur5_push_execution
             return false;
         }
 
-        PushExecutionService(ros::NodeHandle& nh, std::string group_name) : pusher_(group_name)
+        PushExecutionService(ros::NodeHandle& nh, std::string group_name) : pusher_(group_name), as_(nh, "explore_pushes_action", false)
         {
             isPusherAvailable();
             push_execution_ = new PushExecution();
             service_ = nh.advertiseService("/push_execution", &PushExecutionService::onPushRequest, this);
 
+
+
             ROS_INFO("Service advertised!");
+
+            as_.registerGoalCallback(boost::bind(&PushExecutionService::goalCB, this));
+            as_.registerPreemptCallback(boost::bind(&PushExecutionService::preemptCB, this));
+            as_.start();
 
             ros::Rate rate(2);
             while(ros::ok()){
