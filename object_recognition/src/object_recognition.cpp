@@ -87,6 +87,8 @@ class ObjectRecognitionNode {
                             interpolateTransforms(transform_, new_transform_, 0.5, transform_);
                             marker_.header.stamp = ros::Time(0);
                             publishTransformAndMarker(transform_, marker_);
+                        } else {
+                            ROS_WARN_STREAM_THROTTLE(1, "Cannot find transform of object '" << marker_.header.frame_id << "'");
                         }
                         rate.sleep();
                     }
@@ -107,6 +109,7 @@ class ObjectRecognitionNode {
             // TODO: specify object tag mapping
             ph_.param<int>("object_id", object_id_, 11);
             object_tag_id_ = objects_[object_id_].begin()->second["tag_id"];
+            ROS_INFO_STREAM("Looking for object " << object_id_ << " with tag " << object_tag_id_);
             //ph_.param<double>("timeout", timeout_, 10);
         }
 
@@ -216,9 +219,10 @@ class ObjectRecognitionNode {
 
 int main(int argc, char** argv) {
     ros::init(argc, argv, "object_recognition_node");
+    ros::AsyncSpinner spinner(4);
+
+    spinner.start();
 
     ObjectRecognitionNode obj_rec;
-    ROS_INFO_STREAM("ObjectRecognitionNode running!");
-    ros::spin();
     return 0;
 };
