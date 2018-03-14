@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<package>
+  <name>push_learning</name>
+  <version>0.0.0</version>
+  <description>The push_learning package</description>
+
+  <!-- One maintainer tag required, multiple allowed, one person per tag -->
+  <!-- Example:  -->
+  <!-- <maintainer email="jane.doe@example.com">Jane Doe</maintainer> -->
+  <maintainer email="1kayser@informatik.uni-hamburg.de">Henning Kayser</maintainer>
+  <build_depend>rospy</build_depend>
+  <build_depend>tams_ur5_push_execution</build_depend>
+  <build_depend>visualization_msgs</build_depend>
+  <build_depend>ur5_push_setup</build_depend>
+  <run_depend>rospy</run_depend>
+  <run_depend>tams_ur5_push_execution</run_depend>
+  <run_depend>visualization_msgs</run_depend>
+  <run_depend>ur5_push_setup</run_depend>
+
+
+  <run_depend>message_runtime</run_depend>
+
+
+  <!-- One license tag required, multiple allowed, one license per tag -->
+  <!-- Commonly used license strings: -->
+  <!--   BSD, MIT, Boost Software License, GPLv2, GPLv3, LGPLv2.1, LGPLv3 -->
+  <license>BSD</license>
+  <buildtool_depend>catkin</buildtool_depend>
+</package>
