@@ -86,7 +86,8 @@ namespace tams_ur5_push_execution
                     }
 
                     // create push message
-                    createRandomPushMsg(push);
+                    if(!createRandomPushMsg(push))
+                        return false;
 
                     //remove collision object in case the last attempt failed
                     std::vector<std::string> object_ids;
@@ -134,12 +135,17 @@ namespace tams_ur5_push_execution
 
         private:
 
-            void createRandomPushMsg(Push& push) {
+            bool createRandomPushMsg(Push& push) {
                 push.mode = Push::LINEAR;
                 push_sampler_.setMarker(marker_);
-                push.approach = push_sampler_.sampleRandomPushApproach();
-                visualizePushApproach(push.approach);
-                push.distance = 0.05;
+
+                if(push_sampler_.sampleRandomPushApproach(push.approach))
+                {
+                    push.distance = 0.05;
+                    visualizePushApproach(push.approach);
+                    return true;
+                }
+                return false;
             }
 
 

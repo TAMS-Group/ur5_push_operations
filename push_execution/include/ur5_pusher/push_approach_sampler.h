@@ -39,6 +39,6 @@ class PushApproachSampler
 		void setMarker(const visualization_msgs::Marker& marker);
 		void setReferenceFrame(const std::string& reference_frame);
 
-		tams_ur5_push_execution::PushApproach sampleRandomPushApproach();
+		bool sampleRandomPushApproach(tams_ur5_push_execution::PushApproach& approach);
 };
 }

@@ -15,22 +15,19 @@ namespace ur5_pusher
 	}
 
 
-	tams_ur5_push_execution::PushApproach PushApproachSampler::sampleRandomPushApproach()
+	bool PushApproachSampler::sampleRandomPushApproach(tams_ur5_push_execution::PushApproach& approach)
 	{
-		tams_ur5_push_execution::PushApproach approach;
 		approach.frame_id = marker_.header.frame_id;
 
 		geometry_msgs::Pose approach_pose;
 		double angle = 0.0;
-		sampleApproachPoseAndAngle(approach_pose, angle);
-
-		approach.angle = angle;
-		approach.point = approach_pose.position;
-		approach.normal = approach_pose.orientation;
-
-		// visualize contact point with arrow marker
-		//visualizePushApproach(approach.frame_id, approach_pose, approach.angle);
-		return approach;
+		if(sampleApproachPoseAndAngle(approach_pose, angle)) {
+			approach.angle = angle;
+			approach.point = approach_pose.position;
+			approach.normal = approach_pose.orientation;
+			return true;
+		}
+		return true;
 	}
 
 	bool PushApproachSampler::sampleApproachPoseAndAngle(geometry_msgs::Pose& pose, double& angle, int attempts) {
