@@ -18,7 +18,6 @@ namespace ur5_pusher
 	bool PushApproachSampler::sampleRandomPushApproach(tams_ur5_push_execution::PushApproach& approach)
 	{
 		approach.frame_id = marker_.header.frame_id;
-
 		geometry_msgs::Pose approach_pose;
 		double angle = 0.0;
 		if(sampleApproachPoseAndAngle(approach_pose, angle)) {
@@ -27,7 +26,7 @@ namespace ur5_pusher
 			approach.normal = approach_pose.orientation;
 			return true;
 		}
-		return true;
+		return false;
 	}
 
 	bool PushApproachSampler::sampleApproachPoseAndAngle(geometry_msgs::Pose& pose, double& angle, int attempts) {

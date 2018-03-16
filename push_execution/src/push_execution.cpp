@@ -31,7 +31,7 @@ const float MIN_TABLE_DISTANCE = 0.02;
 const float WORKABLE_TIP_LENGTH = 0.08;
 
 // Range to restrict the object on the table
-const float SAFETY_RANGE = 0.15; // Outside of this range the object is pushed towards the center
+const float SAFETY_RANGE = 0.25; // Outside of this range the object is pushed towards the center
 const float EMERGENCY_RANGE = 0.3; // Outside of this range the experiment is aborted
 
 
@@ -109,11 +109,14 @@ namespace tams_ur5_push_execution
                             color.r = 0.5;
                             color.a = 0.5;
                             psi_.applyCollisionObject(obj_, color);
+                            if(!first_attempt_)
+                                pusher.setPathConstraints(get_pusher_down_constraints());
                             pusher.setJointValueTarget(start_state);
 
                             // Move to Pre-Push and allow object collision
                             pusher.move();
                             psi_.removeCollisionObjects(object_ids);
+                            pusher.clearPathConstraints();
 
                             // Get Pre-push pose of object
                             Eigen::Affine3d obj_pose = getObjectTransform(push.approach.frame_id);
@@ -124,6 +127,7 @@ namespace tams_ur5_push_execution
                             // Observe Relocation
                             tf::poseEigenToMsg(obj_pose.inverse() * getObjectTransform(push.approach.frame_id), relocation);
                         }
+                        first_attempt_ = false;
                         return true;
 
                     } else {
@@ -147,6 +151,24 @@ namespace tams_ur5_push_execution
                 }
                 return false;
             }
+
+            moveit_msgs::Constraints get_pusher_down_constraints() {
+                //Create orientation constraint - pusher down
+                moveit_msgs::OrientationConstraint ocm;
+                ocm.link_name = "s_model_tool0";
+                ocm.header.frame_id = "table_top";
+                ocm.orientation = tf::createQuaternionMsgFromRollPitchYaw(0, 0.5*M_PI, 0);
+                ocm.absolute_x_axis_tolerance = 0.3;
+                ocm.absolute_y_axis_tolerance = 0.3;
+                ocm.absolute_z_axis_tolerance = 0.1;
+                ocm.weight = 1.0;
+
+                moveit_msgs::Constraints constraints;
+                constraints.orientation_constraints.push_back(ocm);
+                constraints.name = "pusher:down:0.3:0.1";
+                return constraints;
+            }
+
 
 
             void visualizePushApproach(const PushApproach& approach) {
@@ -288,7 +310,7 @@ namespace tams_ur5_push_execution
                 marker_stamp_ = marker.header.stamp;
             }
 
-            bool createCollisionObject(visualization_msgs::Marker& marker, float padding=0.01) {
+            bool createCollisionObject(visualization_msgs::Marker& marker, float padding=0.015) {
                 if(marker.type == visualization_msgs::Marker::CUBE) {
                     obj_.id = marker.header.frame_id + "_collision";
                     obj_.header.stamp = ros::Time(0);
@@ -343,11 +365,13 @@ namespace tams_ur5_push_execution
                 ExplorePushesGoal goal = (*as_.acceptNewGoal());
                 ExplorePushesFeedback feedback;
                 ExplorePushesResult result;
-                if(!service_busy_ && isPusherAvailable()) {
-                    service_busy_ = true;
-                    ros::Time start_time = ros::Time::now();
-                    result.attempts = 0;
-                    int success_count = 0;
+                result.attempts = 0;
+                ros::Time start_time = ros::Time::now();
+                int success = true;
+				if(!service_busy_ && isPusherAvailable()) {
+					service_busy_ = true;
+					int success_count = 0;
+                    int failed_in_a_row = 0;
                     while (goal.samples==0 || success_count < goal.samples) {
 
                         // cancel run if aborted
@@ -361,18 +385,23 @@ namespace tams_ur5_push_execution
                         if(push_execution_->performRandomPush(pusher_, feedback.push, feedback.relocation)) {
                             as_.publishFeedback(feedback);
                             success_count++;
+                        } else if(failed_in_a_row++ == 10) {
+                            ROS_ERROR("Pusher goal action aborted after 10 failed attempts in a row!");
+                            success = false;
+                            break;
                         }
                     }
-
-                    //send result with elapsed time
-                    result.elapsed_time = ros::Time::now() - start_time;
-                    as_.setSucceeded(result);
-
                 } else {
                     // abort since service is not available
-                    result.attempts = 0;
-                    as_.setAborted(result);
+                    success = false;
                 }
+
+                //send result with elapsed time
+                result.elapsed_time = ros::Time::now() - start_time;
+                if(success)
+                    as_.setSucceeded(result);
+                else
+                    as_.setAborted(result);
                 service_busy_ = false;
             }
 
@@ -439,11 +468,18 @@ namespace tams_ur5_push_execution
             as_.registerPreemptCallback(boost::bind(&PushExecutionService::preemptCB, this));
             as_.start();
 
+            int failed_in_a_row = 0;
             ros::Rate rate(2);
             while(ros::ok()){
                 if(run_nonstop_) {
                     if(isPusherAvailable()) {
-                        performRandomPush(execute_);
+                        if(performRandomPush(execute_))
+                            failed_in_a_row = 0;
+                        else if (failed_in_a_row++ == 10){
+                            ROS_ERROR("Nonstop push exploration aborted after 10 failed attempts!");
+                            run_nonstop_ = false;
+                            service_busy_ = false;
+                        }
                     } else {
                         ROS_ERROR("Nonstop Push Execution terminated. Pusher is not available anymore!");
                         run_nonstop_ = false;
