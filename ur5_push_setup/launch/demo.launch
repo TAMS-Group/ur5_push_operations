@@ -3,6 +3,8 @@
 		<arg name="ur5_joint_ranges_config" value="$(find ur5_push_setup)/config/elbow_up-restricted.yaml"/>
 	</include>
 
+   	<param name="move_group/constraint_approximations_path" value="$(find ur5_push_setup)/cadb"/>
+
 	<include file="$(find object_recognition)/launch/object_recognition.launch">
 		<arg name="demo_mode" value="true"/>
 	</include>
