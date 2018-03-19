@@ -1,6 +1,12 @@
 #include <math.h>
 #include <stdio.h>
 #include <boost/variant.hpp>
+#include <boost/filesystem.hpp>
+#include <iostream>
+#include <fstream>
+#include <chrono>
+#include <ctime> 
+
 //#include <ncurses.h>
 
 #include <ros/ros.h>
@@ -43,10 +49,35 @@ std::vector<std::string> JOINT_NAMES;
 
 class PushExecutionClient {
     public:
+        ros::NodeHandle nh_;
+
         actionlib::SimpleActionClient<tams_ur5_push_execution::ExplorePushesAction> ac_;
+
+        const std::string FN_PUSHES = "pushes";
+        const std::string FN_PRE_POSES = "pre_poses";
+        const std::string FN_POST_POSES = "post_poses";
+
+        bool dump_feedback_;
+        std::string dump_dir_;
 
         PushExecutionClient(const std::string& action_name) : ac_(action_name)
         {
+            //nh_.param<bool>("dump_feedback", dump_feedback_, false);
+            dump_feedback_ = true;
+            if(dump_feedback_) {
+                //nh_.getParam("dump_directory", dump_dir_);
+                dump_dir_ = "feedback_dump_"+getTimeStamp();
+                if(create_dump_directory(dump_dir_))
+                {
+                    tams_ur5_push_execution::ExplorePushesFeedback feedback;
+                    write_csv_header(FN_PRE_POSES, feedback.pre_push);
+                    write_csv_header(FN_PUSHES, feedback.push);
+                    write_csv_header(FN_POST_POSES, feedback.post_push);
+                } else {
+                    ROS_ERROR("Could not create feedback dump directory!");
+                    dump_feedback_ = false;
+                }
+            }
         }
 
         bool performRandomPushAction(int samples=100)
@@ -56,17 +87,17 @@ class PushExecutionClient {
 
             tams_ur5_push_execution::ExplorePushesGoal goal;
             goal.samples = 100;
-            ac_.sendGoal(goal, &doneCb, &activeCb, &feedbackCb);
-            ac_.waitForResult();
-            ROS_INFO_STREAM("Explore Pushes finished collecting " << goal.samples << " samples with " << ac_.getResult()->attempts << " attempts.");
-            ROS_INFO_STREAM("Total time elapsed: " << ac_.getResult()->elapsed_time.toSec() << " seconds");
+            ac_.sendGoal(goal, &doneCb, &activeCb, boost::bind(&PushExecutionClient::feedbackCb, this, _1));
+            //ac_.sendGoal(goal, &doneCb, &activeCb, boost::bind(&PushExecutionClient::feedbackCb, this, _1, _2));
+            //ROS_INFO_STREAM("Explore Pushes finished collecting " << goal.samples << " samples with " << ac_.getResult()->attempts << " attempts.");
+            //ROS_INFO_STREAM("Total time elapsed: " << ac_.getResult()->elapsed_time.toSec() << " seconds");
             return true;
         }
 
-        bool abortRandomPushAction()
+        void abortRandomPushAction()
         {
             //TODO: implement abort
-            return true;
+            ac_.cancelGoal();
         }
 
     private:
@@ -81,10 +112,99 @@ class PushExecutionClient {
             ROS_INFO("Goal just went active");
         }
 
-        static void feedbackCb(const tams_ur5_push_execution::ExplorePushesFeedbackConstPtr& feedback)
+        void feedbackCb(const tams_ur5_push_execution::ExplorePushesFeedbackConstPtr& feedback)
         {
             //ROS_INFO_STREAM("Successfull sample of push " << feedback->push << " with transform " << feedback->relocation);
             std::cout << "Successfull sample of push " << feedback->push << std::endl;
+
+            if(dump_feedback_) {
+                write_csv_line(FN_PRE_POSES, feedback->pre_push);
+                write_csv_line(FN_PUSHES, feedback->push);
+                write_csv_line(FN_POST_POSES, feedback->post_push);
+            }
+        }
+
+        bool create_dump_directory(const std::string& dir_name){
+            try{
+                boost::filesystem::path dir(dir_name);
+                return boost::filesystem::create_directory(dir);
+            } catch(...)
+            {
+                return false;
+            }
+        }
+
+        void write_csv_header(const std::string& file_name, const geometry_msgs::Pose& pose)
+        {
+            std::ofstream file;
+            file.open(dump_dir_ + "/" + file_name + ".csv");
+            file << "position.x,";
+            file << "position.y,";
+            file << "position.z,";
+            file << "orientation.x,";
+            file << "orientation.y,";
+            file << "orientation.z,";
+            file << "orientation.w\n";
+            file.close();
+        }
+
+        void write_csv_line(const std::string& file_name, const geometry_msgs::Pose& pose)
+        {
+            std::ofstream file;
+            file.open(dump_dir_ + "/" + file_name + ".csv", std::ofstream::out | std::ofstream::app);
+            file << pose.position.x << ",";
+            file << pose.position.y << ",";
+            file << pose.position.z << ",";
+            file << pose.orientation.x << ",";
+            file << pose.orientation.y << ",";
+            file << pose.orientation.z << ",";
+            file << pose.orientation.w << "\n";
+            file.close();
+        }
+
+        void write_csv_header(const std::string& file_name, const tams_ur5_push_execution::Push& push)
+        {
+            std::ofstream file;
+            file.open(dump_dir_ + "/" + file_name + ".csv");
+            file << "mode,";
+            file << "approach.frame_id,";
+            file << "approach.point.x,";
+            file << "approach.point.y,";
+            file << "approach.point.z,";
+            file << "approach.normal.x,";
+            file << "approach.normal.y,";
+            file << "approach.normal.z,";
+            file << "approach.normal.w,";
+            file << "approach.angle,";
+            file << "distance\n";
+            file.close();
+        }
+
+        void write_csv_line(const std::string& file_name, const tams_ur5_push_execution::Push& push)
+        {
+            std::ofstream file;
+            file.open(dump_dir_ + "/" + file_name + ".csv", std::ofstream::out | std::ofstream::app);
+            file << std::to_string(push.mode) << ",";
+            file << push.approach.frame_id << ",";
+            file << push.approach.point.x << ",";
+            file << push.approach.point.y << ",";
+            file << push.approach.point.z << ",";
+            file << push.approach.normal.x << ",";
+            file << push.approach.normal.y << ",";
+            file << push.approach.normal.z << ",";
+            file << push.approach.normal.w << ",";
+            file << push.approach.angle << ",";
+            file << push.distance << "\n";
+            file.close();
+        }
+
+        std::string getTimeStamp()
+        {
+            time_t now = time(0);
+            tm *ltm = localtime(&now);
+            std::stringstream s;
+            s << 1 + ltm->tm_mon << ":" << ltm->tm_mday << "-" << ltm->tm_hour << ":" << ltm->tm_min << ":" << ltm->tm_sec;
+            return s.str();
         }
 };
 
@@ -261,10 +381,9 @@ class PushBringup
             return pec_.performRandomPushAction(samples);
         }
 
-        bool abortRandomPushAction()
+        void abortRandomPushAction()
         {
-            //TODO: implement abort
-            return pec_.abortRandomPushAction();
+            pec_.abortRandomPushAction();
         }
 };
 
