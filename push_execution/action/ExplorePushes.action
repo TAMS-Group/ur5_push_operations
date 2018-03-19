@@ -7,4 +7,5 @@ duration elapsed_time
 ---
 #feedback
 Push push
-geometry_msgs/Pose relocation
+geometry_msgs/Pose pre_push
+geometry_msgs/Pose post_push

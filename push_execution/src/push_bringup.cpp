@@ -84,7 +84,7 @@ class PushExecutionClient {
         static void feedbackCb(const tams_ur5_push_execution::ExplorePushesFeedbackConstPtr& feedback)
         {
             //ROS_INFO_STREAM("Successfull sample of push " << feedback->push << " with transform " << feedback->relocation);
-            std::cout << "Successfull sample of push " << feedback->push << " with transform " << feedback->relocation << std::endl;
+            std::cout << "Successfull sample of push " << feedback->push << std::endl;
         }
 };
 

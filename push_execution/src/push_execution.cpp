@@ -75,11 +75,13 @@ namespace tams_ur5_push_execution
             }
 
             bool performRandomPush(ur5_pusher::Pusher& pusher, bool execute_plan=false) {
-                return performRandomPush(pusher, execute_plan);
+                ExplorePushesFeedback fb;
+                return performRandomPush(pusher, fb, execute_plan);
             }
 
-            bool performRandomPush(ur5_pusher::Pusher& pusher, Push& push, geometry_msgs::Pose relocation, bool execute_plan=true) {
+            bool performRandomPush(ur5_pusher::Pusher& pusher, ExplorePushesFeedback& feedback, bool execute_plan=true) {
                 if(!marker_.header.frame_id.empty()) {
+                    Push push;
                     if(ros::Time(0) - marker_stamp_ > ros::Duration(0.5)) {
                         ROS_WARN_THROTTLE(10, "Marker not up to date, skipping push");
                         return false;
@@ -119,14 +121,15 @@ namespace tams_ur5_push_execution
                             pusher.clearPathConstraints();
 
                             // Get Pre-push pose of object
-                            Eigen::Affine3d obj_pose = getObjectTransform(push.approach.frame_id);
+                            tf::poseEigenToMsg(getObjectTransform(push.approach.frame_id), feedback.pre_push);
 
                             // Execute Push
                             pusher.execute(push_plan);
 
                             // Observe Relocation
-                            tf::poseEigenToMsg(obj_pose.inverse() * getObjectTransform(push.approach.frame_id), relocation);
+                            tf::poseEigenToMsg(getObjectTransform(push.approach.frame_id), feedback.post_push);
                         }
+                        feedback.push = push;
                         first_attempt_ = false;
                         return true;
 
@@ -382,7 +385,7 @@ namespace tams_ur5_push_execution
 
                         // perform new attempt and publish feedback
                         result.attempts++;
-                        if(push_execution_->performRandomPush(pusher_, feedback.push, feedback.relocation)) {
+                        if(push_execution_->performRandomPush(pusher_, feedback)) {
                             as_.publishFeedback(feedback);
                             success_count++;
                         } else if(failed_in_a_row++ == 10) {
