@@ -41,39 +41,83 @@ std::string FLAG_EXECUTE = "execute";
 std::vector<double> MAINTENANCE_POSITIONS;
 std::vector<std::string> JOINT_NAMES;
 
+class PushExecutionClient {
+    public:
+        actionlib::SimpleActionClient<tams_ur5_push_execution::ExplorePushesAction> ac_;
+
+        PushExecutionClient(const std::string& action_name) : ac_(action_name)
+        {
+        }
+
+        bool performRandomPushAction(int samples=100)
+        {
+           // actionlib::SimpleActionClient<tams_ur5_push_execution::ExplorePushesAction> ac("explore_pushes_action");
+            ac_.waitForServer();
+
+            tams_ur5_push_execution::ExplorePushesGoal goal;
+            goal.samples = 100;
+            ac_.sendGoal(goal, &doneCb, &activeCb, &feedbackCb);
+            ac_.waitForResult();
+            ROS_INFO_STREAM("Explore Pushes finished collecting " << goal.samples << " samples with " << ac_.getResult()->attempts << " attempts.");
+            ROS_INFO_STREAM("Total time elapsed: " << ac_.getResult()->elapsed_time.toSec() << " seconds");
+            return true;
+        }
+
+        bool abortRandomPushAction()
+        {
+            //TODO: implement abort
+            return true;
+        }
+
+    private:
+        static void doneCb(const actionlib::SimpleClientGoalState& state, 
+                const tams_ur5_push_execution::ExplorePushesResultConstPtr& result)
+        {
+            ROS_INFO_STREAM("Done!");
+        }
+
+        static void activeCb()
+        {
+            ROS_INFO("Goal just went active");
+        }
+
+        static void feedbackCb(const tams_ur5_push_execution::ExplorePushesFeedbackConstPtr& feedback)
+        {
+            //ROS_INFO_STREAM("Successfull sample of push " << feedback->push << " with transform " << feedback->relocation);
+            std::cout << "Successfull sample of push " << feedback->push << " with transform " << feedback->relocation << std::endl;
+        }
+};
+
+
 class PushBringup
 {
 	private:
-		geometry_msgs::Quaternion orientation_down_ = tf::createQuaternionMsgFromRollPitchYaw(0.0, 0.5*M_PI, 0.0);
-		geometry_msgs::Quaternion orientation_up_ = tf::createQuaternionMsgFromRollPitchYaw(0.0, -0.5*M_PI, 0.0);
 		ur5_pusher::Pusher arm_;
 		moveit::planning_interface::MoveGroupInterface gripper_;
 		moveit::planning_interface::PlanningSceneInterface psi_;
 
-		ros::ServiceClient push_execution_client_;
 		ros::NodeHandle nh_;
 
 		bool execute_push_operations_ = false;
+        PushExecutionClient pec_;
 
 	public:
 
-		PushBringup() : arm_("arm"), gripper_("gripper"){
+		PushBringup() : arm_("arm"), gripper_("gripper"), pec_("explore_pushes_action"){
 			createMaintenanceState();
-			const std::string resource = "package://ur5_push_setup/meshes/pusher_2_aligned_x-binary.stl";
-			Eigen::Affine3d transform;
-			geometry_msgs::Pose pose;
 
-			//pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(0.0, 0.0, 0.5*M_PI);
-			//pose.position.y = 0.2 + 0.05625;
-			//std::string parent_link = "s_model_palm";
-			std::string parent_link = "s_model_tool0";
+			geometry_msgs::Pose pose;
 			pose.position.x = 0.2 - 0.0305;
 			pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(0.0, -0.5*M_PI, 0.0);
-			tf::poseMsgToEigen(pose, transform);
-			arm_.setTouchLinks(gripper_.getLinkNames());
-			arm_.loadPusher(resource, transform, parent_link, "pusher0");
 
-			push_execution_client_ = nh_.serviceClient<tams_ur5_push_execution::PerformRandomPush>("push_execution");
+			Eigen::Affine3d transform;
+			tf::poseMsgToEigen(pose, transform);
+
+			arm_.setTouchLinks(gripper_.getLinkNames());
+
+			const std::string resource = "package://ur5_push_setup/meshes/pusher_2_aligned_x-binary.stl";
+			std::string parent_link = "s_model_tool0";
+			arm_.loadPusher(resource, transform, parent_link, "pusher0");
 		};
 
 		void createMaintenanceState()
@@ -187,7 +231,6 @@ class PushBringup
 			geometry_msgs::Pose pose;
 			pose.orientation.w = 1.0;
 			pose.position.z = 0.04;
-			//pose.orientation = orientation_down_;
 			moveit::planning_interface::MoveGroupInterface::Plan plan;
 			std::vector<geometry_msgs::Pose> waypoints;
 			float radius = 0.05;
@@ -213,60 +256,18 @@ class PushBringup
 			}
 		}
 
-		bool performRandomPush()
-		{
-			tams_ur5_push_execution::PerformRandomPush srv;
-			srv.request.operation = tams_ur5_push_execution::PerformRandomPush::Request::OP_DEFAULT;
-			srv.request.execute = execute_push_operations_;
-			push_execution_client_.call(srv);
-			return srv.response.result;
-		}
-
-		bool performRandomPushNonstop(bool terminate)
-		{
-			tams_ur5_push_execution::PerformRandomPush srv;
-			if(terminate) {
-				srv.request.operation = tams_ur5_push_execution::PerformRandomPush::Request::OP_NONSTOP_TERMINATE;
-			} else {
-				srv.request.operation = tams_ur5_push_execution::PerformRandomPush::Request::OP_NONSTOP;
-			}
-			srv.request.execute = execute_push_operations_;
-			push_execution_client_.call(srv);
-			return srv.response.result;
-		}
-
-        static void doneCb(const actionlib::SimpleClientGoalState& state, 
-                    const tams_ur5_push_execution::ExplorePushesResultConstPtr& result)
+        bool performRandomPushAction(int samples = 100)
         {
-            ROS_INFO_STREAM("Done!");
+            return pec_.performRandomPushAction(samples);
         }
 
-        static void activeCb()
+        bool abortRandomPushAction()
         {
-            ROS_INFO("Goal just went active");
-        }
-
-        static void feedbackCb(const tams_ur5_push_execution::ExplorePushesFeedbackConstPtr& feedback)
-        {
-            //ROS_INFO_STREAM("Successfull sample of push " << feedback->push << " with transform " << feedback->relocation);
-            std::cout << "Successfull sample of push " << feedback->push << " with transform " << feedback->relocation << std::endl;
-
-        }
-
-        bool performRandomPushAction()
-        {
-            actionlib::SimpleActionClient<tams_ur5_push_execution::ExplorePushesAction> ac("explore_pushes_action");
-            ac.waitForServer();
-
-            tams_ur5_push_execution::ExplorePushesGoal goal;
-            goal.samples = 100;
-            ac.sendGoal(goal, &doneCb, &activeCb, &feedbackCb);
-            ac.waitForResult();
-            ROS_INFO_STREAM("Explore Pushes finished collecting " << goal.samples << " samples with " << ac.getResult()->attempts << " attempts.");
-            ROS_INFO_STREAM("Total time elapsed: " << ac.getResult()->elapsed_time.toSec() << " seconds");
-            return true;
+            //TODO: implement abort
+            return pec_.abortRandomPushAction();
         }
 };
+
 
 void printHelp() {
 	std::cout << std::endl;
@@ -326,10 +327,17 @@ int main(int argc, char** argv) {
 			pb.runDemoMovement(4);
 		} else if (input == COMMAND_PUSH){
 			std::cout << "Perform random push movement." << std::endl;
-			pb.performRandomPush();
+			pb.performRandomPushAction(1);
 		} else if (input == COMMAND_PUSH_NONSTOP){
 			std::cout << "Perform random push movement nonstop!" << std::endl;
-            pb.performRandomPushAction();
+            if(pb.performRandomPushAction()) {
+                std::cout << "To terminate this operation, press <Enter>" << std::endl;
+				std::getline(std::cin, input);
+				pb.abortRandomPushAction();
+				std::cout << "Push Action terminated by user!" << std::endl;
+			} else {
+				std::cout << "Server failed to perform push action!" << std::endl;
+			}
             /*
 			if(pb.performRandomPushNonstop(false)) {
 				std::cout << "To terminate this operation, press <Enter>" << std::endl;
