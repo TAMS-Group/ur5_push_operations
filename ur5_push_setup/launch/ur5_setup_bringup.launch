@@ -4,7 +4,7 @@
 	</include>
 
 	<arg name="ur5_joint_ranges_config" default="$(find tams_ur5_description)/config/joint_ranges/elbow_up.yaml"/>
-	<arg name="ur5_floating_table" default="true"/>
+	<arg name="ur5_floating_table" default="false"/>
 	<include file="$(find tams_ur5_setup_description)/launch/tams_ur5_setup_upload.launch">
 		<arg name="joint_ranges_config" value="$(arg ur5_joint_ranges_config)"/>
 		<arg name="floating_table" value="$(arg ur5_floating_table)"/>
@@ -12,5 +12,5 @@
 
 	<include file="$(find tams_ur5_setup_moveit_config)/launch/move_group.launch"/>
 
-	<include file="$(find ur5_push_setup)/launch/kinect2_table.launch"/>
+	<include file="$(find ur5_push_setup)/launch/kinect2.launch"/>
 </launch>
