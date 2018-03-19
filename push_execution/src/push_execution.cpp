@@ -310,7 +310,7 @@ namespace tams_ur5_push_execution
     };
 
 
-    class PushExecutionService {
+    class PushExecutionServer {
         private:
             PushExecution* push_execution_;
             ros::ServiceServer service_;
@@ -326,7 +326,7 @@ namespace tams_ur5_push_execution
             bool isPusherAvailable()
             {
                 if(!pusher_.isPusherAttached() && !pusher_.loadFromAttachedObject()) {
-                    ROS_WARN_STREAM("PushExecutionService is running but no pusher is attached to group '" << pusher_.getName() << "'.");
+                    ROS_WARN_STREAM("PushExecutionServer is running but no pusher is attached to group '" << pusher_.getName() << "'.");
                     return false;
                 }
                 return true;
@@ -418,25 +418,25 @@ namespace tams_ur5_push_execution
                     res.result = false;
                 } 
             } else { // Service is still busy!
-                ROS_ERROR_STREAM("PushExecutionService is busy and unable to handle request!");
+                ROS_ERROR_STREAM("PushExecutionServer is busy and unable to handle request!");
                 res.result = false;
             }
 
             return false;
         }
 
-        PushExecutionService(ros::NodeHandle& nh, std::string group_name) : pusher_(group_name), as_(nh, "explore_pushes_action", false)
+        PushExecutionServer(ros::NodeHandle& nh, std::string group_name) : pusher_(group_name), as_(nh, "explore_pushes_action", false)
         {
             isPusherAvailable();
             push_execution_ = new PushExecution();
-            service_ = nh.advertiseService("/push_execution", &PushExecutionService::onPushRequest, this);
+            service_ = nh.advertiseService("/push_execution", &PushExecutionServer::onPushRequest, this);
 
 
 
             ROS_INFO("Service advertised!");
 
-            as_.registerGoalCallback(boost::bind(&PushExecutionService::goalCB, this));
-            as_.registerPreemptCallback(boost::bind(&PushExecutionService::preemptCB, this));
+            as_.registerGoalCallback(boost::bind(&PushExecutionServer::goalCB, this));
+            as_.registerPreemptCallback(boost::bind(&PushExecutionServer::preemptCB, this));
             as_.start();
 
             ros::Rate rate(2);
@@ -464,7 +464,7 @@ namespace tams_ur5_push_execution
 
     ros::NodeHandle nh;
 
-    tams_ur5_push_execution::PushExecutionService pes(nh, "arm");
+    tams_ur5_push_execution::PushExecutionServer pes(nh, "arm");
 
     ros::waitForShutdown();
 
