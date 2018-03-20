@@ -1,4 +1,6 @@
 <launch>
+	<param name="push_result_directory" command="$(find ur5_push_setup)/scripts/create_dump_dirs.sh"/>
+
 	<include file="$(find ur5_push_setup)/launch/ur5_setup_bringup.launch">
 		<arg name="ur5_joint_ranges_config" value="$(find ur5_push_setup)/config/elbow_up-restricted.yaml"/>
 		<arg name="ur5_floating_table" value="false"/>
@@ -9,4 +11,6 @@
 	<include file="$(find object_recognition)/launch/object_recognition.launch">
 		<arg name="demo_mode" value="false"/>
 	</include>
+
+	<node pkg="object_recognition" type="image_dump_service" name="image_dump_service"/>
 </launch>
