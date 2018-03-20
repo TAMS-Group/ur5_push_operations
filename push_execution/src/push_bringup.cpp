@@ -60,24 +60,17 @@ class PushExecutionClient {
         bool dump_feedback_;
         std::string dump_dir_;
 
-        PushExecutionClient(const std::string& action_name) : ac_(action_name)
+        PushExecutionClient(const std::string& action_name, const std::string& dump_dir) : ac_(action_name), dump_dir_(dump_dir)
         {
-            //nh_.param<bool>("dump_feedback", dump_feedback_, false);
-            dump_feedback_ = true;
-            if(dump_feedback_) {
-                //nh_.getParam("dump_directory", dump_dir_);
-                dump_dir_ = "feedback_dump_"+getTimeStamp();
-                if(create_dump_directory(dump_dir_))
-                {
-                    tams_ur5_push_execution::ExplorePushesFeedback feedback;
-                    write_csv_header(FN_PRE_POSES, feedback.pre_push);
-                    write_csv_header(FN_PUSHES, feedback.push);
-                    write_csv_header(FN_POST_POSES, feedback.post_push);
-                } else {
-                    ROS_ERROR("Could not create feedback dump directory!");
-                    dump_feedback_ = false;
-                }
-            }
+		//nh_.param<bool>("dump_feedback", dump_feedback_, false);
+		dump_feedback_ = true;
+		if(dump_feedback_) {
+			//nh_.getParam("dump_directory", dump_dir_);
+			tams_ur5_push_execution::ExplorePushesFeedback feedback;
+			write_csv_header(FN_PRE_POSES, feedback.pre_push);
+			write_csv_header(FN_PUSHES, feedback.push);
+			write_csv_header(FN_POST_POSES, feedback.post_push);
+		}
         }
 
         bool performRandomPushAction(int samples=100)
@@ -121,16 +114,6 @@ class PushExecutionClient {
                 write_csv_line(FN_PRE_POSES, feedback->pre_push);
                 write_csv_line(FN_PUSHES, feedback->push);
                 write_csv_line(FN_POST_POSES, feedback->post_push);
-            }
-        }
-
-        bool create_dump_directory(const std::string& dir_name){
-            try{
-                boost::filesystem::path dir(dir_name);
-                return boost::filesystem::create_directory(dir);
-            } catch(...)
-            {
-                return false;
             }
         }
 
@@ -223,7 +206,7 @@ class PushBringup
 
 	public:
 
-		PushBringup() : arm_("arm"), gripper_("gripper"), pec_("explore_pushes_action"){
+		PushBringup(const std::string& push_result_dir) : arm_("arm"), gripper_("gripper"), pec_("explore_pushes_action", push_result_dir){
 			createMaintenanceState();
 
 			geometry_msgs::Pose pose;
@@ -411,7 +394,15 @@ int main(int argc, char** argv) {
 	ros::init(argc,argv, "push_bringup_node", ros::init_options::NoRosout);
 	ros::AsyncSpinner spinner(4);
 	spinner.start();
-	PushBringup pb;
+	ros::NodeHandle nh;
+	std::string push_result_dir;
+	if(!nh.getParam("push_result_directory", push_result_dir))
+	{
+		ROS_ERROR_STREAM("Unable to start bringup without 'push_result_directory' set. Make sure to launch ur5_push_bringup first!");
+		return 1;
+	}
+
+	PushBringup pb(push_result_dir);
 
 	std::cout << "========================================" << std::endl;
 	std::cout << std::endl << "Launching Push operator bringup" << std::endl;
