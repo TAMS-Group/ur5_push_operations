@@ -439,7 +439,7 @@ namespace tams_ur5_push_execution
 
             PushExecutionServer(ros::NodeHandle& nh, std::string group_name) : pusher_(group_name), as_(nh, "explore_pushes_action", true)
         {
-            take_snapshots_ = true;
+            nh.param("take_snapshots", take_snapshots_, false);
             if(take_snapshots_)
                 snapshot_client_ = nh.serviceClient<object_recognition::ImageDump>("/image_dump_service");
             isPusherAvailable();

@@ -13,4 +13,8 @@
 	</include>
 
 	<node pkg="object_recognition" type="image_dump_service" name="image_dump_service"/>
+
+	<node pkg="tams_ur5_push_execution" type="push_execution" name="push_execution_service">
+		<arg name="take_snapshots" value="false"/>
+	</node>
 </launch>
