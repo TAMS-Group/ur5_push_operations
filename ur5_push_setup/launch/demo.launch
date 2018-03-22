@@ -11,4 +11,5 @@
 		<arg name="demo_mode" value="true"/>
 	</include>
 
+	<node pkg="tams_ur5_push_execution" type="push_execution" name="push_execution_service"/>
 </launch>
