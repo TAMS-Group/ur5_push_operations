@@ -24,6 +24,8 @@
 #include <tams_ur5_push_execution/PerformRandomPush.h>
 #include <tams_ur5_push_execution/ExplorePushesAction.h>
 
+#include <object_recognition/ImageDump.h>
+
 
 std::string MARKER_TOPIC = "/pushable_objects";
 
@@ -138,6 +140,11 @@ namespace tams_ur5_push_execution
                     }
                 }
                 return false;
+            }
+
+            void reset()
+            {
+                first_attempt_ = true;
             }
 
         private:
@@ -342,11 +349,15 @@ namespace tams_ur5_push_execution
 
             actionlib::SimpleActionServer<ExplorePushesAction> as_;
 
+
             ur5_pusher::Pusher pusher_;
 
             bool service_busy_ = false;
             bool run_nonstop_= false;
             bool execute_= false;
+
+            ros::ServiceClient snapshot_client_;
+            bool take_snapshots_;
 
             bool isPusherAvailable()
             {
@@ -357,13 +368,7 @@ namespace tams_ur5_push_execution
                 return true;
             }
 
-            bool performRandomPush(bool execute) {
-                    ROS_INFO("Performing random push");
-                    return push_execution_->performRandomPush(pusher_, execute);
-
-            }
-
-            void goalCB()
+            void acceptGoal()
             {
                 ExplorePushesGoal goal = (*as_.acceptNewGoal());
                 ExplorePushesFeedback feedback;
@@ -371,21 +376,27 @@ namespace tams_ur5_push_execution
                 result.attempts = 0;
                 ros::Time start_time = ros::Time::now();
                 int success = true;
-				if(!service_busy_ && isPusherAvailable()) {
-					service_busy_ = true;
-					int success_count = 0;
+                int preempted = false;
+                if(!service_busy_ && isPusherAvailable()) {
+                    push_execution_->reset();
+                    service_busy_ = true;
+                    int success_count = 0;
                     int failed_in_a_row = 0;
                     while (goal.samples==0 || success_count < goal.samples) {
+                        feedback.attempt = result.attempts;
 
-                        // cancel run if aborted
-                        if(!as_.isActive()) {
-                            service_busy_ = false;
-                            return;
+                        // preempt goal if canceled
+                        if(as_.isPreemptRequested()) {
+                            ROS_WARN_STREAM("Preempt requested - canceling goal!");
+                            preempted = true;
+                            break;
                         }
 
                         // perform new attempt and publish feedback
                         result.attempts++;
+                        take_snapshot(std::to_string(feedback.attempt) + "_before");
                         if(push_execution_->performRandomPush(pusher_, feedback)) {
+                            take_snapshot(std::to_string(feedback.attempt) + "_after");
                             as_.publishFeedback(feedback);
                             success_count++;
                         } else if(failed_in_a_row++ == 10) {
@@ -399,105 +410,53 @@ namespace tams_ur5_push_execution
                     success = false;
                 }
 
-                //send result with elapsed time
+
+                // stop elapsed time
                 result.elapsed_time = ros::Time::now() - start_time;
+
+                // send result
                 if(success)
                     as_.setSucceeded(result);
+                else if(preempted)
+                    as_.setPreempted(result);
                 else
                     as_.setAborted(result);
+
+                // free service
                 service_busy_ = false;
             }
 
-            void preemptCB()
+            void take_snapshot(const std::string& filename)
             {
-                as_.setPreempted();
+                if(take_snapshots_) {
+                    object_recognition::ImageDump srv;
+                    srv.request.filename = filename;
+                    snapshot_client_.call(srv);
+                }
             }
 
         public:
 
-	    bool onPushRequest(tams_ur5_push_execution::PerformRandomPush::Request& req, 
-			    tams_ur5_push_execution::PerformRandomPush::Response& res)
-	    {
-            // First check if the request is of type OP_NONSTOP_TERMINATE
-		    if(req.operation == PerformRandomPush::Request::OP_NONSTOP_TERMINATE) { //NONSTOP_TERMINATE
-			    execute_ = req.execute;
-                run_nonstop_ = false;
-                service_busy_ = false;
-                res.result = true;
-                return true;
-            }
-
-
-            if(!service_busy_) {
-
-                // If service and pusher are available, the request can be handled
-                if (isPusherAvailable()) {
-                    service_busy_ = true;
-
-                    if(req.operation == PerformRandomPush::Request::OP_DEFAULT) { //DEFAULT
-                        res.result = performRandomPush(req.execute);
-                        service_busy_ = false;
-                    }
-                    if(req.operation == PerformRandomPush::Request::OP_NONSTOP) { //Start NONSTOP
-                        execute_ = req.execute;
-                        run_nonstop_ = true;
-                        res.result = true;
-                    }
-                    return true;
-
-                } else { // Pusher is not available!
-                    ROS_ERROR("Unable to perform push operations since no pusher is attached!");
-                    res.result = false;
-                } 
-            } else { // Service is still busy!
-                ROS_ERROR_STREAM("PushExecutionServer is busy and unable to handle request!");
-                res.result = false;
-            }
-
-            return false;
-        }
-
-        PushExecutionServer(ros::NodeHandle& nh, std::string group_name) : pusher_(group_name), as_(nh, "explore_pushes_action", false)
+            PushExecutionServer(ros::NodeHandle& nh, std::string group_name) : pusher_(group_name), as_(nh, "explore_pushes_action", true)
         {
+            take_snapshots_ = true;
+            if(take_snapshots_)
+                snapshot_client_ = nh.serviceClient<object_recognition::ImageDump>("/image_dump_service");
             isPusherAvailable();
             push_execution_ = new PushExecution();
-            service_ = nh.advertiseService("/push_execution", &PushExecutionServer::onPushRequest, this);
 
-
-
-            ROS_INFO("Service advertised!");
-
-            as_.registerGoalCallback(boost::bind(&PushExecutionServer::goalCB, this));
-            as_.registerPreemptCallback(boost::bind(&PushExecutionServer::preemptCB, this));
-            as_.start();
-
-            int failed_in_a_row = 0;
             ros::Rate rate(2);
             while(ros::ok()){
-                if(run_nonstop_) {
-                    if(isPusherAvailable()) {
-                        if(performRandomPush(execute_))
-                            failed_in_a_row = 0;
-                        else if (failed_in_a_row++ == 10){
-                            ROS_ERROR("Nonstop push exploration aborted after 10 failed attempts!");
-                            run_nonstop_ = false;
-                            service_busy_ = false;
-                        }
-                    } else {
-                        ROS_ERROR("Nonstop Push Execution terminated. Pusher is not available anymore!");
-                        run_nonstop_ = false;
-                        service_busy_ = false;
-                    }
-                } else {
-                    rate.sleep();
-                }
+                if(!service_busy_ && as_.isNewGoalAvailable())
+                    acceptGoal();
+                rate.sleep();
             }
         }
     };
 }
 
-    int main(int argc, char** argv) {
-        ros::init(argc, argv, "push_execution_node");
+int main(int argc, char** argv) {
+    ros::init(argc, argv, "push_execution_node");
     ros::AsyncSpinner spinner(4);
     spinner.start();
 

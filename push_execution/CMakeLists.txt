@@ -10,6 +10,7 @@ find_package(catkin REQUIRED COMPONENTS
 	actionlib
 	roscpp
 	geometry_msgs
+    object_recognition
 	std_msgs
 	visualization_msgs
 	moveit_msgs
