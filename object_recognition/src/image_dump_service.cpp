@@ -20,23 +20,25 @@ namespace object_recognition {
 
         std::string dir_name_;
 
-        ImageDump::Request* next_request_ = NULL;
         std::queue<ImageDumpTask> image_dump_tasks_;
+        sensor_msgs::ImageConstPtr image_ = NULL;
 
         bool onRequestImageDump(ImageDump::Request& req, ImageDump::Response& res)
         {
-            next_request_ = &req;
-        }
+            ROS_INFO_STREAM("Request image dump: " << req.filename);
+            const sensor_msgs::ImageConstPtr image(image_);
 
-        void imageCallback(const sensor_msgs::ImageConstPtr& msg)
-        {
-            if(next_request_!=NULL) {
+            if(image!=NULL) {
                 ImageDumpTask t;
-                t.filename = next_request_->filename;
-                t.image = msg;
+                t.filename = req.filename;
+                t.image = image;
                 image_dump_tasks_.push(t);
             }
-            next_request_ = NULL;
+        }
+
+        void imageCallback(const sensor_msgs::ImageConstPtr& image)
+        {
+            image_ = image;
         }
 
         void dumpImage(const ImageDumpTask& task) {
