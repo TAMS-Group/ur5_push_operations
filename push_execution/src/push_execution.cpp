@@ -125,7 +125,15 @@ namespace tams_ur5_push_execution
                             // Get Pre-push pose of object
                             tf::poseEigenToMsg(getObjectTransform(push.approach.frame_id), feedback.pre_push);
 
-                            // Execute Push
+                            // Use current state as first trajectory point and recompute timestamps
+                            pusher.getCurrentState()->copyJointGroupPositions("arm", push_plan.trajectory_.joint_trajectory.points[0].positions);
+
+                            trajectory_processing::IterativeParabolicTimeParameterization iptp;
+                            robot_trajectory::RobotTrajectory traj(pusher.getRobotModel(), pusher.getName());
+                            traj.setRobotTrajectoryMsg((*pusher.getCurrentState()), push_plan.trajectory_);
+                            iptp.computeTimeStamps(traj, 0.4, 0.8);
+                            traj.getRobotTrajectoryMsg(push_plan.trajectory_);
+
                             pusher.execute(push_plan);
 
                             // Observe Relocation
@@ -292,15 +300,10 @@ namespace tams_ur5_push_execution
                         state = pusher.getJointValueTarget();
                         pusher.setPoseReferenceFrame("table_top");
                         pusher.setStartState(state);
-                        double success_fraction = pusher.computeCartesianPushPath(waypoints, 0.05, 3, trajectory);
+                        double success_fraction = pusher.computeCartesianPushPath(waypoints, 0.005, 3, trajectory);
                         pusher.clearPoseTargets();
                         pusher.setStartStateToCurrentState();
                         if(success_fraction == 1.0) {
-                            trajectory_processing::IterativeParabolicTimeParameterization iptp;
-                            robot_trajectory::RobotTrajectory traj(pusher.getRobotModel(), pusher.getName());
-                            traj.setRobotTrajectoryMsg(state, trajectory);
-                            iptp.computeTimeStamps(traj, 0.4, 0.6);
-                            traj.getRobotTrajectoryMsg(trajectory);
                             return true;
                         } else {
                             ROS_ERROR_STREAM("Could not plan cartesian push path. Achieved " << success_fraction * 100 << "%");
