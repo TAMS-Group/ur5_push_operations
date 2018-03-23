@@ -64,6 +64,7 @@ class PushExecutionClient {
     {
         dump_feedback_ = true;
         if(dump_feedback_) {
+            //TODO: check if file exists
             tams_ur5_push_execution::ExplorePushesFeedback feedback;
             write_csv_header(FN_PRE_POSES, feedback.pre_push);
             write_csv_header(FN_PUSHES, feedback.push);
@@ -100,9 +101,10 @@ class PushExecutionClient {
         void feedbackCb(const tams_ur5_push_execution::ExplorePushesFeedbackConstPtr& feedback)
         {
             if(dump_feedback_) {
-                write_csv_line(FN_PRE_POSES, feedback->attempt, feedback->pre_push);
-                write_csv_line(FN_PUSHES, feedback->attempt, feedback->push);
-                write_csv_line(FN_POST_POSES, feedback->attempt, feedback->post_push);
+                int id = feedback->id;
+                write_csv_line(FN_PRE_POSES, id, feedback->pre_push);
+                write_csv_line(FN_PUSHES, id, feedback->push);
+                write_csv_line(FN_POST_POSES, id, feedback->post_push);
             }
         }
 
@@ -120,10 +122,10 @@ class PushExecutionClient {
             file.close();
         }
 
-        void write_csv_line(const std::string& file_name, int attempt, const geometry_msgs::Pose& pose)
+        void write_csv_line(const std::string& file_name, int id, const geometry_msgs::Pose& pose)
         {
             std::ofstream file(dump_dir_ + "/" + file_name + ".csv", std::ofstream::out | std::ofstream::app);
-            file << std::to_string(attempt) << ",";
+            file << std::to_string(id) << ",";
             file << pose.position.x << ",";
             file << pose.position.y << ",";
             file << pose.position.z << ",";
@@ -152,10 +154,10 @@ class PushExecutionClient {
             file.close();
         }
 
-        void write_csv_line(const std::string& file_name, int attempt, const tams_ur5_push_execution::Push& push)
+        void write_csv_line(const std::string& file_name, int id, const tams_ur5_push_execution::Push& push)
         {
             std::ofstream file(dump_dir_ + "/" + file_name + ".csv", std::ofstream::out | std::ofstream::app);
-            file << std::to_string(attempt) << ",";
+            file << std::to_string(id) << ",";
             file << std::to_string(push.mode) << ",";
             file << push.approach.frame_id << ",";
             file << push.approach.point.x << ",";

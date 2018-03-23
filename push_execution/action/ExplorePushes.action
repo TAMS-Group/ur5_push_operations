@@ -6,7 +6,7 @@ int32 attempts
 duration elapsed_time
 ---
 #feedback
-int32 attempt
+int32 id
 Push push
 geometry_msgs/Pose pre_push
 geometry_msgs/Pose post_push

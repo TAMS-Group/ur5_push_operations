@@ -355,6 +355,7 @@ namespace tams_ur5_push_execution
             bool execute_= false;
             bool take_snapshots_ = false;
 
+            int id_count_ = 0;
 
             bool isPusherAvailable()
             {
@@ -380,7 +381,7 @@ namespace tams_ur5_push_execution
                     int success_count = 0;
                     int failed_in_a_row = 0;
                     while (goal.samples==0 || success_count < goal.samples) {
-                        feedback.attempt = result.attempts;
+                        feedback.id = id_count_;
 
                         // preempt goal if canceled
                         if(as_.isPreemptRequested()) {
@@ -391,9 +392,10 @@ namespace tams_ur5_push_execution
 
                         // perform new attempt and publish feedback
                         result.attempts++;
-                        take_snapshot(std::to_string(feedback.attempt) + "_before");
+                        id_count_++;
+                        take_snapshot(std::to_string(feedback.id) + "_before");
                         if(push_execution_->performRandomPush(pusher_, feedback, execute_)) {
-                            take_snapshot(std::to_string(feedback.attempt) + "_after");
+                            take_snapshot(std::to_string(feedback.id) + "_after");
                             as_.publishFeedback(feedback);
                             success_count++;
                         } else if(failed_in_a_row++ == 10) {
