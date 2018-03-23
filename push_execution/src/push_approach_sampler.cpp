@@ -33,8 +33,15 @@ namespace ur5_pusher
 		geometry_msgs::PoseStamped object_pose, marker_pose;
 		marker_pose.pose = marker_.pose;
 		marker_pose.header.frame_id = marker_.header.frame_id;
+
 		tf_listener_.transformPose(reference_frame_, marker_pose, object_pose);
-		float distance = std::sqrt(std::pow(object_pose.pose.position.x,2) + std::pow(object_pose.pose.position.y,2));
+
+		// get distance from object to table_top
+		tf::Vector3 obj_vec;
+		object_pose.pose.position.z = 0.0;
+		tf::pointMsgToTF(object_pose.pose.position, obj_vec);
+		float distance = obj_vec.length();
+
 		if(distance < safety_range_) {
 			pose = sampleRandomPoseFromBox(marker_.scale.x, marker_.scale.y, marker_.scale.z);
 			angle = sampleRandomPushAngle();
@@ -42,26 +49,29 @@ namespace ur5_pusher
 		}
 		if(distance < emergency_range_) {
 			ROS_WARN("Object outside of SAFETY RANGE. Sampling for pushes towards table center!");
-			tf::Vector3 table_vec;
-			object_pose.pose.position.z = 0.0;
-			tf::pointMsgToTF(object_pose.pose.position, table_vec);
-			table_vec = -table_vec;
+;
+			obj_vec = -obj_vec;
 
 			tf::Quaternion obj_orientation;
+			tf::quaternionMsgToTF(object_pose.pose.orientation, obj_orientation);
+
 			tf::Quaternion push_normal;
 			tf::Quaternion push_direction;
-			push_direction.setRPY(0.0, 0.0, angle);
-			tf::quaternionMsgToTF(object_pose.pose.orientation, obj_orientation);
-			tf::Vector3 push_vec(1,0,0);
 
+			double angle_limit = 20.0 / 180.0 * M_PI;
 			for(int i = 0; i < attempts; i++) {
 				pose = sampleRandomPoseFromBox(marker_.scale.x, marker_.scale.y, marker_.scale.z);
 				angle = sampleRandomPushAngle();
+
+				// set push approach surface normal
 				tf::quaternionMsgToTF(pose.orientation, push_normal);
+
+				// set sampled push direction
+				push_direction.setRPY(0.0, 0.0, angle);
+
 				tf::Vector3 push_vec(1,0,0);
 				push_vec = tf::quatRotate(obj_orientation * push_normal * push_direction, push_vec);
-				double angle_limit = 20.0 / 180.0 * M_PI;
-				double angle_towards_table = table_vec.angle(push_vec);
+				double angle_towards_table = obj_vec.angle(push_vec);
 				if(angle_towards_table < angle_limit || angle_towards_table > (2*M_PI - angle_limit)) {
 					return true;
 				}
@@ -114,7 +124,6 @@ namespace ur5_pusher
 	}
 
 	float PushApproachSampler::sampleRandomPushAngle(float range) {
-		std::normal_distribution<> d{0,0.5};
-		return std::max(-range, std::min(range, (float)d(gen)));
+		return std::max(-range, std::min(range, (float)normal_dist_(gen)));
 	}
 }

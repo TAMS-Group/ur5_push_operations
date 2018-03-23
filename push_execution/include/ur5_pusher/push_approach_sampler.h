@@ -18,6 +18,8 @@ namespace ur5_pusher
 class PushApproachSampler
 {
 	private:
+		std::normal_distribution<> normal_dist_{0,0.5};
+
 		visualization_msgs::Marker marker_;
 		const float safety_range_;
 		const float emergency_range_;
