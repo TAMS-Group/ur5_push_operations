@@ -33,7 +33,7 @@ const float MIN_TABLE_DISTANCE = 0.02;
 const float WORKABLE_TIP_LENGTH = 0.08;
 
 // Range to restrict the object on the table
-const float SAFETY_RANGE = 0.25; // Outside of this range the object is pushed towards the center
+const float SAFETY_RANGE = 0.05; // Outside of this range the object is pushed towards the center
 const float EMERGENCY_RANGE = 0.3; // Outside of this range the experiment is aborted
 
 
@@ -256,7 +256,7 @@ namespace tams_ur5_push_execution
                     approach_affine = obj_pose_affine * approach_affine * direction;
 
                     //trajectory distances
-                    float approach_distance = 0.05;
+                    float approach_distance = 0.07;
                     float retreat_height = marker_.scale.z + 0.1;
 
                     // fill waypoints
@@ -299,7 +299,7 @@ namespace tams_ur5_push_execution
                             trajectory_processing::IterativeParabolicTimeParameterization iptp;
                             robot_trajectory::RobotTrajectory traj(pusher.getRobotModel(), pusher.getName());
                             traj.setRobotTrajectoryMsg(state, trajectory);
-                            iptp.computeTimeStamps(traj, 0.5, 0.7);
+                            iptp.computeTimeStamps(traj, 0.4, 0.6);
                             traj.getRobotTrajectoryMsg(trajectory);
                             return true;
                         } else {
@@ -320,7 +320,7 @@ namespace tams_ur5_push_execution
                 marker_stamp_ = marker.header.stamp;
             }
 
-            bool createCollisionObject(visualization_msgs::Marker& marker, float padding=0.015) {
+            bool createCollisionObject(visualization_msgs::Marker& marker, float padding=0.02) {
                 if(marker.type == visualization_msgs::Marker::CUBE) {
                     obj_.id = marker.header.frame_id + "_collision";
                     obj_.header.stamp = ros::Time(0);
@@ -344,20 +344,17 @@ namespace tams_ur5_push_execution
 
     class PushExecutionServer {
         private:
+
             PushExecution* push_execution_;
-            ros::ServiceServer service_;
-
-            actionlib::SimpleActionServer<ExplorePushesAction> as_;
-
-
             ur5_pusher::Pusher pusher_;
 
-            bool service_busy_ = false;
-            bool run_nonstop_= false;
-            bool execute_= false;
-
+            actionlib::SimpleActionServer<ExplorePushesAction> as_;
             ros::ServiceClient snapshot_client_;
-            bool take_snapshots_;
+
+            bool service_busy_ = false;
+            bool execute_= false;
+            bool take_snapshots_ = false;
+
 
             bool isPusherAvailable()
             {
@@ -395,7 +392,7 @@ namespace tams_ur5_push_execution
                         // perform new attempt and publish feedback
                         result.attempts++;
                         take_snapshot(std::to_string(feedback.attempt) + "_before");
-                        if(push_execution_->performRandomPush(pusher_, feedback)) {
+                        if(push_execution_->performRandomPush(pusher_, feedback, execute_)) {
                             take_snapshot(std::to_string(feedback.attempt) + "_after");
                             as_.publishFeedback(feedback);
                             success_count++;
@@ -428,7 +425,7 @@ namespace tams_ur5_push_execution
 
             void take_snapshot(const std::string& filename)
             {
-                if(take_snapshots_) {
+                if(execute_ && take_snapshots_) {
                     object_recognition::ImageDump srv;
                     srv.request.filename = filename;
                     snapshot_client_.call(srv);
@@ -439,8 +436,10 @@ namespace tams_ur5_push_execution
 
             PushExecutionServer(ros::NodeHandle& nh, std::string group_name) : pusher_(group_name), as_(nh, "explore_pushes_action", true)
         {
-            nh.param("take_snapshots", take_snapshots_, false);
-            if(take_snapshots_)
+            ros::NodeHandle pnh("~");
+            pnh.param("take_snapshots", take_snapshots_, false);
+            pnh.param("execute", execute_, false);
+            if(execute_ && take_snapshots_)
                 snapshot_client_ = nh.serviceClient<object_recognition::ImageDump>("/image_dump_service");
             isPusherAvailable();
             push_execution_ = new PushExecution();
