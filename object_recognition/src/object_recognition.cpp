@@ -120,7 +120,7 @@ class ObjectRecognitionNode {
 
         void onDetectAprilTags(const apriltags_ros::AprilTagDetectionArray& msg){
             for(apriltags_ros::AprilTagDetection detection : msg.detections) {
-                ROS_ERROR_STREAM("Detected april tag nr: " << detection.id);
+                //ROS_ERROR_STREAM("Detected april tag nr: " << detection.id);
                 if(detection.id == object_tag_id_) {
                     // create marker
                     if(createObjectMarker(object_id_, marker_)) {
