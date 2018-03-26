@@ -3,10 +3,13 @@
 #include <moveit/move_group_interface/move_group_interface.h>
 #include <moveit/planning_scene_interface/planning_scene_interface.h>
 #include <moveit/planning_scene/planning_scene.h>
+#include <moveit/planning_scene_monitor/planning_scene_monitor.h>
 #include <moveit_msgs/CollisionObject.h>
 
 #include <moveit/trajectory_processing/iterative_time_parameterization.h>
+#include <moveit/robot_state/robot_state.h>
 #include <moveit/robot_trajectory/robot_trajectory.h>
+#include <moveit/robot_state/conversions.h>
 
 #include <tf/transform_listener.h>
 
@@ -25,6 +28,8 @@
 #include <tams_ur5_push_execution/ExplorePushesAction.h>
 
 #include <object_recognition/ImageDump.h>
+
+#include <std_msgs/Float64.h>
 
 
 std::string MARKER_TOPIC = "/pushable_objects";
@@ -49,9 +54,18 @@ namespace tams_ur5_push_execution
             ros::Subscriber marker_sub_;
             ros::Publisher contact_point_pub_;
 
+            planning_scene_monitor::PlanningSceneMonitor psm_;
+            planning_scene_monitor::CurrentStateMonitorPtr csm_;
+
+            ros::Publisher dist_pub_;
+            ros::Publisher dist2_pub_;
+
             moveit::planning_interface::PlanningSceneInterface psi_;
 
             ur5_pusher::PushApproachSampler push_sampler_;
+
+            ros::ServiceClient snapshot_client_;
+            bool take_snapshots_ = false;
 
             tf::TransformListener tf_listener_;
 
@@ -63,11 +77,15 @@ namespace tams_ur5_push_execution
             bool first_attempt_ = true;
 
         public:
-            PushExecution(bool execute_plan=false) : push_sampler_(SAFETY_RANGE, EMERGENCY_RANGE, MIN_TABLE_DISTANCE, WORKABLE_TIP_LENGTH){
+            PushExecution(bool execute_plan=false) : push_sampler_(SAFETY_RANGE, EMERGENCY_RANGE, MIN_TABLE_DISTANCE, WORKABLE_TIP_LENGTH), psm_("robot_description"){
 
                 nh_ = (*new ros::NodeHandle());
                 pnh_ = (*new ros::NodeHandle("~"));
                 psi_ = (*new moveit::planning_interface::PlanningSceneInterface());
+                psm_.startStateMonitor();
+                csm_ = psm_.getStateMonitorNonConst();
+                dist_pub_ = nh_.advertise<std_msgs::Float64>("/joint_distances/contact", 100);
+                dist2_pub_ = nh_.advertise<std_msgs::Float64>("/joint_distances/post_push", 100);
 
                 push_sampler_.setReferenceFrame("/table_top");
 
@@ -81,7 +99,13 @@ namespace tams_ur5_push_execution
                 return performRandomPush(pusher, fb, execute_plan);
             }
 
-            bool performRandomPush(ur5_pusher::Pusher& pusher, ExplorePushesFeedback& feedback, bool execute_plan=true) {
+            void enableSnapshots() {
+                snapshot_client_ = nh_.serviceClient<object_recognition::ImageDump>("/image_dump_service");
+                take_snapshots_ = true;
+            }
+
+            bool performRandomPush(ur5_pusher::Pusher& pusher, ExplorePushesFeedback& feedback, bool execute_plan=true) 
+            {
                 if(!marker_.header.frame_id.empty()) {
                     Push push;
                     if(ros::Time(0) - marker_stamp_ > ros::Duration(0.5)) {
@@ -100,10 +124,11 @@ namespace tams_ur5_push_execution
 
                     // declare plan and start state
                     moveit::planning_interface::MoveGroupInterface::Plan push_plan;
-                    robot_state::RobotState start_state(*pusher.getCurrentState());
+                    moveit_msgs::RobotTrajectory approach_traj, push_traj, retreat_traj;
+                    robot_state::RobotState rstate(*pusher.getCurrentState());
 
                     //compute push and retreat trajectory together with start state
-                    if(computeCartesianPushTraj(pusher, push, push_plan.trajectory_, start_state)) {
+                    if(computeCartesianPushTraj(pusher, push, approach_traj, push_traj, retreat_traj, rstate)) {
 
                         // move to pre_push pose on first attempt
                         if(execute_plan) {
@@ -115,7 +140,7 @@ namespace tams_ur5_push_execution
                             psi_.applyCollisionObject(obj_, color);
                             if(!first_attempt_)
                                 pusher.setPathConstraints(get_pusher_down_constraints());
-                            pusher.setJointValueTarget(start_state);
+                            pusher.setJointValueTarget(rstate);
 
                             // Move to Pre-Push and allow object collision
                             pusher.move();
@@ -125,16 +150,74 @@ namespace tams_ur5_push_execution
                             // Get Pre-push pose of object
                             tf::poseEigenToMsg(getObjectTransform(push.approach.frame_id), feedback.pre_push);
 
-                            // Use current state as first trajectory point and recompute timestamps
-                            pusher.getCurrentState()->copyJointGroupPositions("arm", push_plan.trajectory_.joint_trajectory.points[0].positions);
+                            // create intermediate states (contact,  post push)
+                            robot_state::RobotState contact_state(rstate);
+                            contact_state.setJointGroupPositions(pusher.getName(), approach_traj.joint_trajectory.points.back().positions);
 
-                            trajectory_processing::IterativeParabolicTimeParameterization iptp;
+                            bool contact_shot = false;
+
+                            // joint state callback
+                            csm_->addUpdateCallback(
+                                    [&] (const sensor_msgs::JointStateConstPtr& joint_state) {
+                                    if(!contact_shot && joint_state->name.size()>0 && joint_state->name[0] == "ur5_shoulder_pan_joint") {
+                                        rstate.setJointGroupPositions(pusher.getName(), joint_state->position);
+
+                                        if(rstate.distance(contact_state) < 0.03) {
+                                            contact_shot = true;
+                                            take_snapshot(std::to_string(feedback.id) + "_2_contact");
+                                        }
+                                    }
+                                    });
+
+                            // concatenate trajectory parts
+                            pusher.getCurrentState()->copyJointGroupPositions("arm", approach_traj.joint_trajectory.points[0].positions);
                             robot_trajectory::RobotTrajectory traj(pusher.getRobotModel(), pusher.getName());
-                            traj.setRobotTrajectoryMsg((*pusher.getCurrentState()), push_plan.trajectory_);
+                            robot_trajectory::RobotTrajectory append_traj(pusher.getRobotModel(), pusher.getName());
+                            traj.setRobotTrajectoryMsg((*pusher.getCurrentState()), approach_traj);
+                            append_traj.setRobotTrajectoryMsg(contact_state, push_traj);
+                            traj.append(append_traj, 0.0);
+                            // perform iterative time parameterization
+                            trajectory_processing::IterativeParabolicTimeParameterization iptp;
                             iptp.computeTimeStamps(traj, 0.4, 0.8);
                             traj.getRobotTrajectoryMsg(push_plan.trajectory_);
 
+                            take_snapshot(std::to_string(feedback.id) + "_1_before");
+
+                            // EXECUTE PUSH
                             pusher.execute(push_plan);
+
+                            csm_->clearUpdateCallbacks();
+
+                            take_snapshot(std::to_string(feedback.id) + "_3_after");
+
+                            // retreat trajectory
+                            pusher.getCurrentState()->copyJointGroupPositions("arm", retreat_traj.joint_trajectory.points[0].positions);
+                            traj.setRobotTrajectoryMsg((*pusher.getCurrentState()), retreat_traj);
+                            iptp.computeTimeStamps(traj, 0.4, 0.8);
+                            traj.getRobotTrajectoryMsg(push_plan.trajectory_);
+                            pusher.execute(push_plan);
+
+                            /*
+
+                            // approach movement
+                            moveit::planning_interface::MoveGroupInterface::Plan push_plan;
+                            readjustTrajectory(pusher, approach_traj, push_plan.trajectory_);
+                            pusher.execute(push_plan);
+
+                            // before snapshot
+                            take_snapshot(std::to_string(feedback.id) + "_before");
+
+                            // push movement
+                            readjustTrajectory(pusher, push_traj, push_plan.trajectory_);
+                            pusher.execute(push_plan);
+
+                            // after snapshot
+                            take_snapshot(std::to_string(feedback.id) + "_after");
+
+                            // retreat movement
+                            readjustTrajectory(pusher, retreat_traj, push_plan.trajectory_);
+                            pusher.execute(push_plan);
+                            */
 
                             // Observe Relocation
                             tf::poseEigenToMsg(getObjectTransform(push.approach.frame_id), feedback.post_push);
@@ -157,6 +240,16 @@ namespace tams_ur5_push_execution
 
         private:
 
+            moveit_msgs::RobotTrajectory& readjustTrajectory(ur5_pusher::Pusher& pusher, moveit_msgs::RobotTrajectory& traj_msg, moveit_msgs::RobotTrajectory& target_traj) {
+                // Use current state as first trajectory point and recompute timestamps
+                pusher.getCurrentState()->copyJointGroupPositions("arm", traj_msg.joint_trajectory.points[0].positions);
+                trajectory_processing::IterativeParabolicTimeParameterization iptp;
+                robot_trajectory::RobotTrajectory traj(pusher.getRobotModel(), pusher.getName());
+                traj.setRobotTrajectoryMsg((*pusher.getCurrentState()), traj_msg);
+                iptp.computeTimeStamps(traj, 0.4, 0.8);
+                traj.getRobotTrajectoryMsg(target_traj);
+            }
+
             bool createRandomPushMsg(Push& push) {
                 push.mode = Push::LINEAR;
                 push_sampler_.setMarker(marker_);
@@ -168,6 +261,13 @@ namespace tams_ur5_push_execution
                     return true;
                 }
                 return false;
+            }
+
+            void take_snapshot(const std::string& filename)
+            {
+                object_recognition::ImageDump srv;
+                srv.request.filename = filename;
+                snapshot_client_.call(srv);
             }
 
             moveit_msgs::Constraints get_pusher_down_constraints() {
@@ -241,236 +341,247 @@ namespace tams_ur5_push_execution
                 return obj_pose_affine;
             }
 
-            bool computeCartesianPushTraj(ur5_pusher::Pusher& pusher, tams_ur5_push_execution::Push& push, moveit_msgs::RobotTrajectory& trajectory, robot_state::RobotState& state) {
-                if(push.mode == tams_ur5_push_execution::Push::LINEAR) {
+            bool computeCartesianPushTraj(ur5_pusher::Pusher& pusher, tams_ur5_push_execution::Push& push, moveit_msgs::RobotTrajectory& approach_traj, moveit_msgs::RobotTrajectory& push_traj, moveit_msgs::RobotTrajectory& retreat_traj, robot_state::RobotState& state) 
+            {
 
-                    // object pose
-                    geometry_msgs::PoseStamped obj_pose;
-                    obj_pose.header.frame_id = push.approach.frame_id;
-                    obj_pose.pose.orientation.w = 1.0;
-                    tf_listener_.transformPose("table_top", obj_pose, obj_pose);
-                    Eigen::Affine3d obj_pose_affine;
-                    tf::poseMsgToEigen(obj_pose.pose, obj_pose_affine);
+                // object pose
+                geometry_msgs::PoseStamped obj_pose;
+                obj_pose.header.frame_id = push.approach.frame_id;
+                obj_pose.pose.orientation.w = 1.0;
+                tf_listener_.transformPose("table_top", obj_pose, obj_pose);
+                Eigen::Affine3d obj_pose_affine;
+                tf::poseMsgToEigen(obj_pose.pose, obj_pose_affine);
 
-                    // push direction
-                    Eigen::Affine3d direction(Eigen::AngleAxis<double>(push.approach.angle, Eigen::Vector3d::UnitZ()));
+                // push direction
+                Eigen::Affine3d direction(Eigen::AngleAxis<double>(push.approach.angle, Eigen::Vector3d::UnitZ()));
 
-                    // approach point
-                    Eigen::Affine3d approach_affine(Eigen::Affine3d::Identity());
-                    geometry_msgs::Pose pose;
-                    pose.position = push.approach.point;
-                    pose.orientation = push.approach.normal;
-                    tf::poseMsgToEigen(pose, approach_affine);
-                    approach_affine = obj_pose_affine * approach_affine * direction;
+                // approach point
+                Eigen::Affine3d approach_affine(Eigen::Affine3d::Identity());
+                geometry_msgs::Pose pose;
+                pose.position = push.approach.point;
+                pose.orientation = push.approach.normal;
+                tf::poseMsgToEigen(pose, approach_affine);
+                approach_affine = obj_pose_affine * approach_affine * direction;
 
-                    //trajectory distances
-                    float approach_distance = 0.07;
-                    float retreat_height = marker_.scale.z + 0.1;
+                //trajectory distances
+                float approach_distance = 0.07;
+                float retreat_height = marker_.scale.z + 0.1;
 
-                    // fill waypoints
-                    std::vector<geometry_msgs::Pose> waypoints;
-                    geometry_msgs::Pose waypoint;
-                    geometry_msgs::Quaternion orientation;
-                    orientation.w = 1.0;
+                // fill waypoints
+                geometry_msgs::Pose start_wp, approach_wp, push_wp, retreat_wp;
+                geometry_msgs::Quaternion orientation;
+                orientation.w = 1.0;
 
-                    Eigen::Affine3d wp(Eigen::Affine3d::Identity()); // instantiate as identity transform!!!
-                    wp.translate(Eigen::Vector3d(-approach_distance, 0.0, 0.0));
-                    tf::poseEigenToMsg(approach_affine * wp, waypoint);
-                    waypoint.orientation = orientation;
-                    waypoints.push_back(waypoint);
+                Eigen::Affine3d wp(Eigen::Affine3d::Identity()); // instantiate as identity transform!!!
+                wp.translate(Eigen::Vector3d(-approach_distance, 0.0, 0.0));
+                tf::poseEigenToMsg(approach_affine * wp, start_wp);
+                start_wp.orientation = orientation;
 
-                    wp.translate(Eigen::Vector3d(approach_distance + push.distance, 0.0, 0.0));
-                    tf::poseEigenToMsg(approach_affine * wp, waypoint);
-                    waypoint.orientation = orientation;
-                    waypoints.push_back(waypoint);
+                wp.translate(Eigen::Vector3d(approach_distance, 0.0, 0.0));
+                tf::poseEigenToMsg(approach_affine * wp, approach_wp);
+                approach_wp.orientation = orientation;
 
-                    wp.translate(Eigen::Vector3d(-push.distance, 0.0, retreat_height));
-                    tf::poseEigenToMsg(approach_affine * wp, waypoint);
-                    waypoint.orientation = orientation;
-                    waypoints.push_back(waypoint);
+                wp.translate(Eigen::Vector3d(push.distance, 0.0, 0.0));
+                tf::poseEigenToMsg(approach_affine * wp, push_wp);
+                push_wp.orientation = orientation;
 
-                    // start state to be set from IK
-                    geometry_msgs::PoseStamped ps;
-                    ps.pose = waypoints[0];
-                    ps.header.frame_id = "table_top";
-                    tf_listener_.transformPose(pusher.getPlanningFrame(), ps, ps);
+                wp.translate(Eigen::Vector3d(-push.distance, 0.0, retreat_height));
+                tf::poseEigenToMsg(approach_affine * wp, retreat_wp);
+                retreat_wp.orientation = orientation;
 
-                    //compute cartesian path
-                    if(pusher.setPusherJointValueTarget(ps)) {
-                        state = pusher.getJointValueTarget();
-                        pusher.setPoseReferenceFrame("table_top");
-                        pusher.setStartState(state);
-                        double success_fraction = pusher.computeCartesianPushPath(waypoints, 0.005, 3, trajectory);
-                        pusher.clearPoseTargets();
-                        pusher.setStartStateToCurrentState();
-                        if(success_fraction == 1.0) {
-                            return true;
+                // start state to be set from IK
+                geometry_msgs::PoseStamped ps;
+                ps.pose = start_wp;
+                ps.header.frame_id = "table_top";
+                tf_listener_.transformPose(pusher.getPlanningFrame(), ps, ps);
+
+                bool success = false;
+
+                //compute cartesian path
+                if(pusher.setPusherJointValueTarget(ps)) {
+                    state = pusher.getJointValueTarget();
+                    pusher.setStartState(state);
+                    pusher.setPoseReferenceFrame("table_top");
+                    std::vector<geometry_msgs::Pose> waypoints = {approach_wp};
+                    double approach_success = pusher.computeCartesianPushPath(waypoints, 0.005, 3, approach_traj);
+                    if(approach_success == 1.0) {
+                        robot_state::RobotStatePtr rstate = pusher.getCurrentState();
+                        moveit_msgs::RobotState wp_state;
+                        const moveit::core::JointModelGroup* jmg = rstate->getJointModelGroup(pusher.getName());
+                        rstate->setJointGroupPositions(jmg, approach_traj.joint_trajectory.points.back().positions);
+                        moveit::core::robotStateToRobotStateMsg(*rstate, wp_state);
+                        pusher.setStartState(wp_state);
+                        waypoints = {push_wp};
+                        double push_success = pusher.computeCartesianPushPath(waypoints, 0.005, 3, push_traj);
+                        if(push_success == 1.0) {
+                            rstate->setJointGroupPositions(jmg, push_traj.joint_trajectory.points.back().positions);
+                            moveit::core::robotStateToRobotStateMsg(*rstate, wp_state);
+                            pusher.setStartState(wp_state);
+                            waypoints = {retreat_wp};
+                            double retreat_success = pusher.computeCartesianPushPath(waypoints, 0.005, 3, retreat_traj);
+                            if(retreat_success == 1.0) {
+                                success = true;
+                            } else {
+                                ROS_ERROR_STREAM("Failed planning cartesian retreat path: " << retreat_success * 100 << "%");
+                            }
                         } else {
-                            ROS_ERROR_STREAM("Could not plan cartesian push path. Achieved " << success_fraction * 100 << "%");
+                            ROS_ERROR_STREAM("Failed planning cartesian push path: " << push_success * 100 << "%");
                         }
                     } else {
-                        ROS_WARN("Could not set start pose of push trajectory from IK!");
+                        ROS_ERROR_STREAM("Failed planning cartesian approach path: " << approach_success * 100 << "%");
                     }
-                    pusher.setStartStateToCurrentState();
+                } else {
+                    ROS_WARN("Could not set start pose of push trajectory from IK!");
                 }
-                return false;
+                pusher.clearPoseTargets();
+                pusher.setStartStateToCurrentState();
+                return success;
             }
 
             void onDetectObjects(visualization_msgs::Marker marker) {
                 if(marker_.id != marker.id && createCollisionObject(marker)) {
                     marker_ = marker;
                 }
-                marker_stamp_ = marker.header.stamp;
-            }
-
-            bool createCollisionObject(visualization_msgs::Marker& marker, float padding=0.02) {
-                if(marker.type == visualization_msgs::Marker::CUBE) {
-                    obj_.id = marker.header.frame_id + "_collision";
-                    obj_.header.stamp = ros::Time(0);
-                    obj_.header.frame_id = marker.header.frame_id;
-                    obj_.primitive_poses.resize(1);
-                    obj_.primitive_poses[0].orientation.w = 1;
-                    obj_.primitive_poses[0].position.z = 0.5 * padding;
-                    obj_.primitives.resize(1);
-                    obj_.operation = moveit_msgs::CollisionObject::ADD;
-                    obj_.primitives[0].type = shape_msgs::SolidPrimitive::BOX;
-                    obj_.primitives[0].dimensions.resize(3);
-                    obj_.primitives[0].dimensions[shape_msgs::SolidPrimitive::BOX_X] = marker.scale.x + 2 * padding;
-                    obj_.primitives[0].dimensions[shape_msgs::SolidPrimitive::BOX_Y] = marker.scale.y + 2 * padding;
-                    obj_.primitives[0].dimensions[shape_msgs::SolidPrimitive::BOX_Z] = marker.scale.z + padding;
-                    return true;
+                    marker_stamp_ = marker.header.stamp;
                 }
-                return false;
-            }
-    };
 
-
-    class PushExecutionServer {
-        private:
-
-            PushExecution* push_execution_;
-            ur5_pusher::Pusher pusher_;
-
-            actionlib::SimpleActionServer<ExplorePushesAction> as_;
-            ros::ServiceClient snapshot_client_;
-
-            bool service_busy_ = false;
-            bool execute_= false;
-            bool take_snapshots_ = false;
-
-            int id_count_ = 0;
-
-            bool isPusherAvailable()
-            {
-                if(!pusher_.isPusherAttached() && !pusher_.loadFromAttachedObject()) {
-                    ROS_WARN_STREAM("PushExecutionServer is running but no pusher is attached to group '" << pusher_.getName() << "'.");
+                bool createCollisionObject(visualization_msgs::Marker& marker, float padding=0.02) {
+                    if(marker.type == visualization_msgs::Marker::CUBE) {
+                        obj_.id = marker.header.frame_id + "_collision";
+                        obj_.header.stamp = ros::Time(0);
+                        obj_.header.frame_id = marker.header.frame_id;
+                        obj_.primitive_poses.resize(1);
+                        obj_.primitive_poses[0].orientation.w = 1;
+                        obj_.primitive_poses[0].position.z = 0.5 * padding;
+                        obj_.primitives.resize(1);
+                        obj_.operation = moveit_msgs::CollisionObject::ADD;
+                        obj_.primitives[0].type = shape_msgs::SolidPrimitive::BOX;
+                        obj_.primitives[0].dimensions.resize(3);
+                        obj_.primitives[0].dimensions[shape_msgs::SolidPrimitive::BOX_X] = marker.scale.x + 2 * padding;
+                        obj_.primitives[0].dimensions[shape_msgs::SolidPrimitive::BOX_Y] = marker.scale.y + 2 * padding;
+                        obj_.primitives[0].dimensions[shape_msgs::SolidPrimitive::BOX_Z] = marker.scale.z + padding;
+                        return true;
+                    }
                     return false;
                 }
-                return true;
-            }
+            };
 
-            void acceptGoal()
-            {
-                ExplorePushesGoal goal = (*as_.acceptNewGoal());
-                ExplorePushesFeedback feedback;
-                ExplorePushesResult result;
-                result.attempts = 0;
-                ros::Time start_time = ros::Time::now();
-                int success = true;
-                int preempted = false;
-                if(!service_busy_ && isPusherAvailable()) {
-                    push_execution_->reset();
-                    service_busy_ = true;
-                    int success_count = 0;
-                    int failed_in_a_row = 0;
-                    while (goal.samples==0 || success_count < goal.samples) {
-                        feedback.id = id_count_;
+            class PushExecutionServer {
+                private:
 
-                        // preempt goal if canceled
-                        if(as_.isPreemptRequested()) {
-                            ROS_WARN_STREAM("Preempt requested - canceling goal!");
-                            preempted = true;
-                            break;
+                    PushExecution* push_execution_;
+                    ur5_pusher::Pusher pusher_;
+
+                    actionlib::SimpleActionServer<ExplorePushesAction> as_;
+
+
+                    bool service_busy_ = false;
+                    bool execute_= false;
+                    bool take_snapshots_ = false;
+
+                    int id_count_ = 0;
+
+                    bool isPusherAvailable()
+                    {
+                        if(!pusher_.isPusherAttached() && !pusher_.loadFromAttachedObject()) {
+                            ROS_WARN_STREAM("PushExecutionServer is running but no pusher is attached to group '" << pusher_.getName() << "'.");
+                            return false;
                         }
-
-                        // perform new attempt and publish feedback
-                        result.attempts++;
-                        id_count_++;
-                        take_snapshot(std::to_string(feedback.id) + "_before");
-                        if(push_execution_->performRandomPush(pusher_, feedback, execute_)) {
-                            take_snapshot(std::to_string(feedback.id) + "_after");
-                            as_.publishFeedback(feedback);
-                            success_count++;
-                        } else if(failed_in_a_row++ == 10) {
-                            ROS_ERROR("Pusher goal action aborted after 10 failed attempts in a row!");
-                            success = false;
-                            break;
-                        }
+                        return true;
                     }
-                } else {
-                    // abort since service is not available
-                    success = false;
+
+                    void acceptGoal()
+                    {
+                        ExplorePushesGoal goal = (*as_.acceptNewGoal());
+                        ExplorePushesFeedback feedback;
+                        ExplorePushesResult result;
+                        result.attempts = 0;
+                        ros::Time start_time = ros::Time::now();
+                        int success = true;
+                        int preempted = false;
+                        if(!service_busy_ && isPusherAvailable()) {
+                            push_execution_->reset();
+                            service_busy_ = true;
+                            int success_count = 0;
+                            int failed_in_a_row = 0;
+                            while (goal.samples==0 || success_count < goal.samples) {
+                                feedback.id = id_count_;
+
+                                // preempt goal if canceled
+                                if(as_.isPreemptRequested()) {
+                                    ROS_WARN_STREAM("Preempt requested - canceling goal!");
+                                    preempted = true;
+                                    break;
+                                }
+
+                                // perform new attempt and publish feedback
+                                result.attempts++;
+                                id_count_++;
+                                if(push_execution_->performRandomPush(pusher_, feedback, execute_)) {
+                                    as_.publishFeedback(feedback);
+                                    success_count++;
+                                } else if(failed_in_a_row++ == 10) {
+                                    ROS_ERROR("Pusher goal action aborted after 10 failed attempts in a row!");
+                                    success = false;
+                                    break;
+                                }
+                            }
+                        } else {
+                            // abort since service is not available
+                            success = false;
+                        }
+
+
+                        // stop elapsed time
+                        result.elapsed_time = ros::Time::now() - start_time;
+
+                        // send result
+                        if(success)
+                            as_.setSucceeded(result);
+                        else if(preempted)
+                            as_.setPreempted(result);
+                        else
+                            as_.setAborted(result);
+
+                        // free service
+                        service_busy_ = false;
+                    }
+
+                public:
+
+                    PushExecutionServer(ros::NodeHandle& nh, std::string group_name) : pusher_(group_name), as_(nh, "explore_pushes_action", true)
+                {
+                    ros::NodeHandle pnh("~");
+                    pnh.param("take_snapshots", take_snapshots_, false);
+                    pnh.param("execute", execute_, false);
+
+                    isPusherAvailable();
+                    push_execution_ = new PushExecution();
+                    if(execute_ && take_snapshots_)
+                        push_execution_->enableSnapshots();
+
+                    ros::Rate rate(2);
+                    while(ros::ok()){
+                        if(!service_busy_ && as_.isNewGoalAvailable())
+                            acceptGoal();
+                        rate.sleep();
+                    }
                 }
+            };
+    }
 
+    int main(int argc, char** argv) {
+        ros::init(argc, argv, "push_execution_node");
+        ros::AsyncSpinner spinner(4);
+        spinner.start();
 
-                // stop elapsed time
-                result.elapsed_time = ros::Time::now() - start_time;
+        ros::NodeHandle nh;
 
-                // send result
-                if(success)
-                    as_.setSucceeded(result);
-                else if(preempted)
-                    as_.setPreempted(result);
-                else
-                    as_.setAborted(result);
+        tams_ur5_push_execution::PushExecutionServer pes(nh, "arm");
 
-                // free service
-                service_busy_ = false;
-            }
+        ros::waitForShutdown();
 
-            void take_snapshot(const std::string& filename)
-            {
-                if(execute_ && take_snapshots_) {
-                    object_recognition::ImageDump srv;
-                    srv.request.filename = filename;
-                    snapshot_client_.call(srv);
-                }
-            }
-
-        public:
-
-            PushExecutionServer(ros::NodeHandle& nh, std::string group_name) : pusher_(group_name), as_(nh, "explore_pushes_action", true)
-        {
-            ros::NodeHandle pnh("~");
-            pnh.param("take_snapshots", take_snapshots_, false);
-            pnh.param("execute", execute_, false);
-            if(execute_ && take_snapshots_)
-                snapshot_client_ = nh.serviceClient<object_recognition::ImageDump>("/image_dump_service");
-            isPusherAvailable();
-            push_execution_ = new PushExecution();
-
-            ros::Rate rate(2);
-            while(ros::ok()){
-                if(!service_busy_ && as_.isNewGoalAvailable())
-                    acceptGoal();
-                rate.sleep();
-            }
-        }
-    };
-}
-
-int main(int argc, char** argv) {
-    ros::init(argc, argv, "push_execution_node");
-    ros::AsyncSpinner spinner(4);
-    spinner.start();
-
-    ros::NodeHandle nh;
-
-    tams_ur5_push_execution::PushExecutionServer pes(nh, "arm");
-
-    ros::waitForShutdown();
-
-    return 0;
-}
+        return 0;
+    }
 
 
