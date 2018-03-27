@@ -72,12 +72,12 @@ class PushExecutionClient {
         }
     }
 
-        bool performRandomPushAction(int samples=100)
+        bool performRandomPushAction(int samples=0)
         {
             ac_.waitForServer();
 
             tams_ur5_push_execution::ExplorePushesGoal goal;
-            goal.samples = 100;
+            goal.samples = samples;
             ac_.sendGoal(goal, &doneCb, &activeCb, boost::bind(&PushExecutionClient::feedbackCb, this, _1));
             return true;
         }
