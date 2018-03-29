@@ -2,7 +2,16 @@
 
 namespace ur5_pusher
 {
-	PushApproachSampler::PushApproachSampler(const float safety_range, const float emergency_range, const float min_table_distance, const float tip_length) : safety_range_(safety_range), emergency_range_(emergency_range), min_table_distance_(min_table_distance), tip_length_(tip_length) {}
+	PushApproachSampler::PushApproachSampler()
+	{
+		ros::NodeHandle pnh("~");
+		pnh.param("min_table_distance", min_table_distance_, MIN_TABLE_DISTANCE);
+		pnh.param("safety_range", safety_range_, SAFETY_RANGE);
+		pnh.param("emergency_range", emergency_range_, EMERGENCY_RANGE);
+		pnh.param("tip_length", tip_length_, TIP_LENGTH);
+		pnh.param("approach_distance", approach_distance_, TIP_LENGTH);
+
+	}
 
 	void PushApproachSampler::setMarker(const visualization_msgs::Marker& marker)
 	{
