@@ -27,6 +27,7 @@
 
 #include <ur5_pusher/pusher.h>
 #include <tams_ur5_push_execution/PerformRandomPush.h>
+#include <tams_ur5_push_execution/PusherMovement.h>
 #include <tams_ur5_push_execution/ExplorePushesAction.h>
 
 std::string COMMAND_MAINTENANCE = "maintenance";
@@ -37,6 +38,7 @@ std::string COMMAND_PUSHER_DETACH = "detach";
 std::string COMMAND_DEMO = "demo";
 std::string COMMAND_PUSH = "push";
 std::string COMMAND_PUSH_NONSTOP = "push nonstop";
+std::string COMMAND_POINT = "point";
 std::string COMMAND_SET = "set";
 std::string COMMAND_UNSET = "unset";
 std::string COMMAND_HELP = "help";
@@ -185,10 +187,14 @@ class PushBringup
 
         bool execute_push_operations_ = false;
         PushExecutionClient pec_;
+        ros::ServiceClient pusher_movements_;
 
     public:
 
         PushBringup(const std::string& push_result_dir) : arm_("arm"), gripper_("gripper"), pec_("explore_pushes_action", push_result_dir){
+
+            ros::NodeHandle nh;
+            pusher_movements_ = nh.serviceClient<tams_ur5_push_execution::PusherMovement>("point_at_box");
             createMaintenanceState();
 
             geometry_msgs::Pose pose;
@@ -250,6 +256,11 @@ class PushBringup
             arm_.setPoseReferenceFrame("table_top");
             arm_.setPusherPoseTarget(pose);
             return bool(arm_.move());
+        }
+
+        bool pointAtBox() {
+            tams_ur5_push_execution::PusherMovement srv;
+            pusher_movements_.call(srv);
         }
 
         bool openGripper() {
@@ -440,6 +451,9 @@ int main(int argc, char** argv) {
                std::cout << "Service failed to perform nonstop push operations!" << std::endl;
                }
                */
+        } else if (input == COMMAND_POINT){
+            std::cout << "Point at pushable object." << std::endl;
+            pb.pointAtBox();
         } else if (input == COMMAND_SET + " " + FLAG_EXECUTE){
             pb.setExecute(true);
         } else if (input == COMMAND_UNSET + " " + FLAG_EXECUTE){

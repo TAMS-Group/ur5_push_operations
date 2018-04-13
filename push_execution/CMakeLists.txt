@@ -36,6 +36,7 @@ add_message_files(
 add_service_files(
 	FILES
 	PerformRandomPush.srv
+	PusherMovement.srv
 )
 
 generate_messages(
