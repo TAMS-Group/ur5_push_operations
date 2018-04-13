@@ -3,8 +3,8 @@
 #include <tf/transform_broadcaster.h>
 #include <visualization_msgs/Marker.h>
 
-#include <apriltags_ros/AprilTagDetection.h>
-#include <apriltags_ros/AprilTagDetectionArray.h>
+#include <apriltags2_ros/AprilTagDetection.h>
+#include <apriltags2_ros/AprilTagDetectionArray.h>
 
 #include <XmlRpcValue.h>
 #include <XmlRpcException.h>
@@ -84,7 +84,8 @@ class ObjectRecognitionNode {
                     ros::Rate rate(10);
                     while(ros::ok()) {
                         if(knows_transform_) {
-                            interpolateTransforms(transform_, new_transform_, 0.5, transform_);
+                            //interpolateTransforms(transform_, new_transform_, 0.5, transform_);
+                            transform_ = new_transform_;
                             marker_.header.stamp = ros::Time(0);
                             publishTransformAndMarker(transform_, marker_);
                         } else {
@@ -118,15 +119,17 @@ class ObjectRecognitionNode {
             marker_pub_.publish(marker);
         }
 
-        void onDetectAprilTags(const apriltags_ros::AprilTagDetectionArray& msg){
-            for(apriltags_ros::AprilTagDetection detection : msg.detections) {
+        void onDetectAprilTags(const apriltags2_ros::AprilTagDetectionArray& msg){
+            for(apriltags2_ros::AprilTagDetection detection : msg.detections) {
                 //ROS_ERROR_STREAM("Detected april tag nr: " << detection.id);
-                if(detection.id == object_tag_id_) {
+                if(detection.id[0] == object_tag_id_) {
                     // create marker
                     if(createObjectMarker(object_id_, marker_)) {
                         // extract transform from pose
                         detection_time_ = detection.pose.header.stamp;
-                        geometry_msgs::PoseStamped pose = detection.pose;
+                        geometry_msgs::PoseStamped pose;
+                        pose.header = detection.pose.header;
+                        pose.pose = detection.pose.pose.pose;
                         pose.header.stamp = ros::Time(0);
                         try{
                             tf_listener_.transformPose("/table_top", pose, pose);

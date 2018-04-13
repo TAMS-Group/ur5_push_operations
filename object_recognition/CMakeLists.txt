@@ -4,7 +4,7 @@ project(object_recognition)
 set(CMAKE_CXX_STANDARD 11)
 
 find_package(catkin REQUIRED COMPONENTS
-    apriltags_ros
+    apriltags2_ros
     roscpp
     visualization_msgs
     tf
