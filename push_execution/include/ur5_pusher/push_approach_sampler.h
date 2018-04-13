@@ -11,6 +11,7 @@
 
 std::random_device rd;
 std::mt19937 gen{rd()};
+std::uniform_real_distribution<double> unif_dist_{0.0,1.0};
 
 namespace ur5_pusher
 {
@@ -18,7 +19,6 @@ namespace ur5_pusher
 class PushApproachSampler
 {
 	private:
-		std::normal_distribution<> normal_dist_{0,0.5};
 
 		visualization_msgs::Marker marker_;
 		const float safety_range_;
@@ -34,7 +34,7 @@ class PushApproachSampler
 		bool sampleApproachPoseAndAngle(geometry_msgs::Pose& pose, double& angle, int attempts=100);
 		geometry_msgs::Pose sampleRandomPoseFromBox(double dim_x, double dim_y, double dim_z);
 
-		float sampleRandomPushAngle(float range=0.5);
+		double sampleRandomPushAngle(double range=0.5);
 
 	public:
 		PushApproachSampler(const float safety_range, const float emergency_range, const float min_table_distance, const float tip_length);

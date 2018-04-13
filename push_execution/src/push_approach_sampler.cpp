@@ -123,7 +123,7 @@ namespace ur5_pusher
 		return pose;
 	}
 
-	float PushApproachSampler::sampleRandomPushAngle(float range) {
-		return std::max(-range, std::min(range, (float)normal_dist_(gen)));
+	double PushApproachSampler::sampleRandomPushAngle(double range) {
+		return 2 * range * unif_dist_(gen) - range;
 	}
 }
