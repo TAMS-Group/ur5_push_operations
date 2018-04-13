@@ -16,16 +16,25 @@ std::uniform_real_distribution<double> unif_dist_{0.0,1.0};
 namespace ur5_pusher
 {
 
+const float MIN_TABLE_DISTANCE = 0.02;
+const float TIP_LENGTH = 0.08;
+
+// Range to restrict the object on the table
+const float SAFETY_RANGE = 0.05; // Outside of this range the object is pushed towards the center
+const float EMERGENCY_RANGE = 0.3; // Outside of this range the experiment is aborted
+
 class PushApproachSampler
 {
 	private:
 
 		visualization_msgs::Marker marker_;
-		const float safety_range_;
-		const float emergency_range_;
+		float safety_range_;
+		float emergency_range_;
 
-		const float min_table_distance_;
-		const float tip_length_;
+		float min_table_distance_;
+		float approach_distance_;
+		float tip_length_;
+		float tip_radius_;
 
 		std::string reference_frame_;
 
@@ -37,7 +46,7 @@ class PushApproachSampler
 		double sampleRandomPushAngle(double range=0.5);
 
 	public:
-		PushApproachSampler(const float safety_range, const float emergency_range, const float min_table_distance, const float tip_length);
+		PushApproachSampler();
 		void setMarker(const visualization_msgs::Marker& marker);
 		void setReferenceFrame(const std::string& reference_frame);
 

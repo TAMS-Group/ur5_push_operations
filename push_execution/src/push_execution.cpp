@@ -32,16 +32,9 @@
 
 #include <std_msgs/Float64.h>
 
+const double TIP_RADIUS = 0.004;
 
 std::string MARKER_TOPIC = "/pushable_objects";
-
-const float MIN_TABLE_DISTANCE = 0.02;
-const float WORKABLE_TIP_LENGTH = 0.08;
-
-// Range to restrict the object on the table
-const float SAFETY_RANGE = 0.1; // Outside of this range the object is pushed towards the center
-const float EMERGENCY_RANGE = 0.3; // Outside of this range the experiment is aborted
-
 
 namespace tams_ur5_push_execution
 {
@@ -77,8 +70,10 @@ namespace tams_ur5_push_execution
 
             bool first_attempt_ = true;
 
+	    double tip_radius_;
+
         public:
-            PushExecution(bool execute_plan=false) : push_sampler_(SAFETY_RANGE, EMERGENCY_RANGE, MIN_TABLE_DISTANCE, WORKABLE_TIP_LENGTH), psm_("robot_description"){
+            PushExecution(bool execute_plan=false) : psm_("robot_description"){
 
                 nh_ = (*new ros::NodeHandle());
                 pnh_ = (*new ros::NodeHandle("~"));
@@ -87,6 +82,8 @@ namespace tams_ur5_push_execution
                 csm_ = psm_.getStateMonitorNonConst();
                 dist_pub_ = nh_.advertise<std_msgs::Float64>("/joint_distances/contact", 100);
                 dist2_pub_ = nh_.advertise<std_msgs::Float64>("/joint_distances/post_push", 100);
+
+		pnh_.param("tip_radius", tip_radius_, TIP_RADIUS);
 
                 push_sampler_.setReferenceFrame("/table_top");
 
@@ -382,6 +379,8 @@ namespace tams_ur5_push_execution
                 Eigen::Affine3d approach_affine(Eigen::Affine3d::Identity());
                 geometry_msgs::Pose pose;
                 pose.position = push.approach.point;
+		// move approach pose outwards by tip_radius to disable early contact
+		pose.position.x -= tip_radius_; 
                 pose.orientation = push.approach.normal;
                 tf::poseMsgToEigen(pose, approach_affine);
                 approach_affine = obj_pose_affine * approach_affine * direction;

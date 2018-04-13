@@ -17,6 +17,15 @@
 	<node pkg="tams_ur5_push_execution" type="push_execution" name="push_execution_service">
 		<param name="take_snapshots" value="true"/>
 		<param name="execute" value="true"/>
+
+		<!-- Sampling parameters -->
+		<param name="min_table_distance" value="0.02" />
+
+		<param name="tip_length" value="0.08" />
+		<param name="tip_radius" value="0.004" />
+
+		<param name="safety_range" value="0.05" />
+		<param name="emergency_range" value="0.3" />
 	</node>
 
 </launch>
