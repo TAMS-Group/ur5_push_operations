@@ -1,6 +1,7 @@
 <?xml version="1.0"?>
 <launch>
 	<include file="$(find kinect2_bridge)/launch/kinect2_bridge.launch">
+		<arg name="output" value="log"/>
 		<arg name="publish_tf" value="true"/>
 		<arg name="calib_path" value="$(find tams_ur5_setup_bringup)/config/kinect2_calib/" />
 	</include>
