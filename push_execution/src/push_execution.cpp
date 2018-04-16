@@ -70,7 +70,7 @@ namespace tams_ur5_push_execution
 
             bool first_attempt_ = true;
 
-	    double tip_radius_;
+            double tip_radius_;
 
         public:
             PushExecution(bool execute_plan=false) : psm_("robot_description"){
@@ -83,7 +83,7 @@ namespace tams_ur5_push_execution
                 dist_pub_ = nh_.advertise<std_msgs::Float64>("/joint_distances/contact", 100);
                 dist2_pub_ = nh_.advertise<std_msgs::Float64>("/joint_distances/post_push", 100);
 
-		pnh_.param("tip_radius", tip_radius_, TIP_RADIUS);
+                pnh_.param("tip_radius", tip_radius_, TIP_RADIUS);
 
                 push_sampler_.setReferenceFrame("/table_top");
 
@@ -105,11 +105,15 @@ namespace tams_ur5_push_execution
             bool performRandomPush(ur5_pusher::Pusher& pusher, ExplorePushesFeedback& feedback, bool execute_plan=true) 
             {
                 if(!marker_.header.frame_id.empty()) {
-                    Push push;
                     if(ros::Time(0) - marker_stamp_ > ros::Duration(0.5)) {
                         ROS_WARN_THROTTLE(10, "Marker not up to date, skipping push");
                         return false;
                     }
+
+                    pusher.setPlannerId("RRTConnectkConfigDefault");
+                    pusher.setPlanningTime(5.0);
+
+                    Push push;
 
                     // create push message
                     if(!createRandomPushMsg(push))
@@ -121,29 +125,71 @@ namespace tams_ur5_push_execution
                     // declare plan and start state
                     moveit::planning_interface::MoveGroupInterface::Plan push_plan;
                     moveit_msgs::RobotTrajectory approach_traj, push_traj, retreat_traj;
-                    robot_state::RobotState rstate(*pusher.getCurrentState());
-                    pusher.setPlannerId("RRTConnectkConfigDefault");
-                    pusher.setPlanningTime(5.0);
 
-                    //compute push and retreat trajectory together with start state
-                    if(computeCartesianPushTraj(pusher, push, approach_traj, push_traj, retreat_traj, rstate)) {
+                    robot_state::RobotState rstate(*pusher.getCurrentState());
+
+                    std::vector<geometry_msgs::Pose> waypoints;
+                    std::vector<double> distances;
+
+                    getPushWaypoints(push, waypoints, distances);
+
+                    // start state to be set from IK
+                    geometry_msgs::PoseStamped ps;
+                    ps.pose = waypoints.front();
+                    ps.header.frame_id = "table_top";
+                    tf_listener_.transformPose(pusher.getPlanningFrame(), ps, ps);
+
+                    if(pusher.setPusherJointValueTarget(ps)) {
+                        robot_state::RobotState start_state = pusher.getJointValueTarget();
+
+                        // Get Pre-push pose of object
+                        tf::poseEigenToMsg(getObjectTransform(push.approach.frame_id), feedback.pre_push);
+
+                        // apply collision object before moving to pre_push
+                        applyCollisionObject();
+                        if(!first_attempt_)
+                            pusher.setPathConstraints(get_pusher_down_constraints());
+
+                        // Move to Pre-Push
+                        moveit::planning_interface::MoveGroupInterface::Plan move_to_obj;
+                        if(!pusher.plan(move_to_obj)) {
+                            ROS_ERROR("Failed at moving to box!");
+                            return false;
+                        }
+
+                        bool is_executing = true;
+
+                        // joint state callback
+                        csm_->addUpdateCallback(
+                                [&] (const sensor_msgs::JointStateConstPtr& joint_state) {
+                                if(is_executing && joint_state->name.size()>0 && joint_state->name[0] == "ur5_shoulder_pan_joint") {
+                                rstate.setJointGroupPositions(pusher.getName(), joint_state->position);
+                                ROS_ERROR_STREAM_THROTTLE(2, "distance " << rstate.distance(start_state));
+
+                                if(rstate.distance(start_state) < 0.05) {
+                                is_executing = false;
+                                }
+                                }
+                                });
+
+                        pusher.asyncExecute(move_to_obj);
+
+                        // remove all path constraints
+                        pusher.clearPathConstraints();
+
+                        // allow object collision
+                        removeCollisionObject();
+
+                        // plan push
+                        bool can_push = computeCartesianPushTraj(pusher, waypoints, distances, approach_traj, push_traj, retreat_traj, start_state);
+
+                        while(is_executing) {
+                            ROS_WARN_THROTTLE(1, "Moving to approach pose.");
+                        }
+                        csm_->clearUpdateCallbacks();
 
                         // move to pre_push pose on first attempt
-                        if(execute_plan) {
-
-                            // apply collision object before moving to pre_push
-                            applyCollisionObject();
-                            if(!first_attempt_)
-                                pusher.setPathConstraints(get_pusher_down_constraints());
-                            pusher.setJointValueTarget(rstate);
-
-                            // Move to Pre-Push and allow object collision
-                            pusher.move();
-                            removeCollisionObject();
-                            pusher.clearPathConstraints();
-
-                            // Get Pre-push pose of object
-                            tf::poseEigenToMsg(getObjectTransform(push.approach.frame_id), feedback.pre_push);
+                        if(execute_plan && can_push) {
 
                             // create intermediate states (contact,  post push)
                             robot_state::RobotState contact_state(rstate);
@@ -173,7 +219,7 @@ namespace tams_ur5_push_execution
                             traj.append(append_traj, 0.0);
                             // perform iterative time parameterization
                             trajectory_processing::IterativeSplineParameterization isp;
-                            isp.computeTimeStamps(traj, 1.0, 1.0);
+                            isp.computeTimeStamps(traj, 3.14, 1.0);
                             traj.getRobotTrajectoryMsg(push_plan.trajectory_);
 
                             take_snapshot(std::to_string(feedback.id) + "_1_before");
@@ -188,38 +234,16 @@ namespace tams_ur5_push_execution
                             // retreat trajectory
                             pusher.getCurrentState()->copyJointGroupPositions("arm", retreat_traj.joint_trajectory.points[0].positions);
                             traj.setRobotTrajectoryMsg((*pusher.getCurrentState()), retreat_traj);
-                            isp.computeTimeStamps(traj, 1.0, 1.0);
+                            isp.computeTimeStamps(traj, 3.14, 1.0);
                             traj.getRobotTrajectoryMsg(push_plan.trajectory_);
                             pusher.execute(push_plan);
 
-                            /*
-
-                            // approach movement
-                            moveit::planning_interface::MoveGroupInterface::Plan push_plan;
-                            readjustTrajectory(pusher, approach_traj, push_plan.trajectory_);
-                            pusher.execute(push_plan);
-
-                            // before snapshot
-                            take_snapshot(std::to_string(feedback.id) + "_before");
-
-                            // push movement
-                            readjustTrajectory(pusher, push_traj, push_plan.trajectory_);
-                            pusher.execute(push_plan);
-
-                            // after snapshot
-                            take_snapshot(std::to_string(feedback.id) + "_after");
-
-                            // retreat movement
-                            readjustTrajectory(pusher, retreat_traj, push_plan.trajectory_);
-                            pusher.execute(push_plan);
-                             */
-
                             // Observe Relocation
                             tf::poseEigenToMsg(getObjectTransform(push.approach.frame_id), feedback.post_push);
+                            feedback.push = push;
+                            first_attempt_ = false;
+                            return true;
                         }
-                        feedback.push = push;
-                        first_attempt_ = false;
-                        return true;
 
                     } else {
                         ROS_INFO_STREAM("Failed to plan and execute push trajectory!");
@@ -361,8 +385,7 @@ namespace tams_ur5_push_execution
                 return obj_pose_affine;
             }
 
-            bool computeCartesianPushTraj(ur5_pusher::Pusher& pusher, tams_ur5_push_execution::Push& push, moveit_msgs::RobotTrajectory& approach_traj, moveit_msgs::RobotTrajectory& push_traj, moveit_msgs::RobotTrajectory& retreat_traj, robot_state::RobotState& state) 
-            {
+            bool getPushWaypoints(tams_ur5_push_execution::Push& push, std::vector<geometry_msgs::Pose>& waypoints, std::vector<double>& wp_distances) {
 
                 // object pose
                 geometry_msgs::PoseStamped obj_pose;
@@ -379,8 +402,9 @@ namespace tams_ur5_push_execution
                 Eigen::Affine3d approach_affine(Eigen::Affine3d::Identity());
                 geometry_msgs::Pose pose;
                 pose.position = push.approach.point;
-		// move approach pose outwards by tip_radius to disable early contact
-		pose.position.x -= tip_radius_; 
+
+                // move approach pose outwards by tip_radius to disable early contact
+                pose.position.x -= tip_radius_;
                 pose.orientation = push.approach.normal;
                 tf::poseMsgToEigen(pose, approach_affine);
                 approach_affine = obj_pose_affine * approach_affine * direction;
@@ -411,51 +435,87 @@ namespace tams_ur5_push_execution
                 tf::poseEigenToMsg(approach_affine * wp, retreat_wp);
                 retreat_wp.orientation = orientation;
 
-                // start state to be set from IK
-                geometry_msgs::PoseStamped ps;
-                ps.pose = start_wp;
-                ps.header.frame_id = "table_top";
-                tf_listener_.transformPose(pusher.getPlanningFrame(), ps, ps);
+                waypoints = {start_wp, approach_wp, push_wp, retreat_wp};
 
+                double retreat_distance = std::sqrt(std::pow(push.distance,2) + std::pow(retreat_height, 2));
+                wp_distances = {approach_distance, push.distance, retreat_distance};
+            }
+
+            bool computeCartesianPushTraj(ur5_pusher::Pusher& pusher, const std::vector<geometry_msgs::Pose> waypoints, const std::vector<double> distances, moveit_msgs::RobotTrajectory& approach_traj, moveit_msgs::RobotTrajectory& push_traj, moveit_msgs::RobotTrajectory& retreat_traj, const robot_state::RobotState start_state)
+            {
+                ros::Time start_time = ros::Time::now();
                 bool success = false;
-
-                //compute cartesian path
-                if(pusher.setPusherJointValueTarget(ps)) {
-                    state = pusher.getJointValueTarget();
-                    pusher.setStartState(state);
+                if(waypoints.size() == 4 && distances.size() == 3) {
                     pusher.setPoseReferenceFrame("table_top");
-                    std::vector<geometry_msgs::Pose> waypoints = {approach_wp};
-                    double approach_success = pusher.computeCartesianPushPath(waypoints, 0.005, 3, approach_traj);
-                    if(approach_success == 1.0) {
-                        robot_state::RobotStatePtr rstate = pusher.getCurrentState();
-                        moveit_msgs::RobotState wp_state;
-                        const moveit::core::JointModelGroup* jmg = rstate->getJointModelGroup(pusher.getName());
-                        rstate->setJointGroupPositions(jmg, approach_traj.joint_trajectory.points.back().positions);
-                        moveit::core::robotStateToRobotStateMsg(*rstate, wp_state);
-                        pusher.setStartState(wp_state);
-                        waypoints = {push_wp};
-                        double push_success = pusher.computeCartesianPushPath(waypoints, 0.005, 3, push_traj);
-                        if(push_success == 1.0) {
-                            rstate->setJointGroupPositions(jmg, push_traj.joint_trajectory.points.back().positions);
-                            moveit::core::robotStateToRobotStateMsg(*rstate, wp_state);
-                            pusher.setStartState(wp_state);
-                            waypoints = {retreat_wp};
-                            double retreat_success = pusher.computeCartesianPushPath(waypoints, 0.005, 3, retreat_traj);
-                            if(retreat_success == 1.0) {
-                                success = true;
-                            } else {
-                                ROS_ERROR_STREAM("Failed planning cartesian retreat path: " << retreat_success * 100 << "%");
-                            }
+
+                    robot_state::RobotStatePtr next_state = pusher.getCurrentState();
+                    const moveit::core::JointModelGroup* jmg = next_state->getJointModelGroup(pusher.getName());
+
+                    pusher.setStartState(start_state);
+                    std::vector<geometry_msgs::Pose> wp_target;
+                    std::vector<moveit_msgs::RobotTrajectory> trajectories;
+
+                    success = true;
+                    int i;
+                    double success_fraction;
+                    for(i=1; i < waypoints.size(); i++) {
+                        wp_target = {waypoints[i]};
+                        moveit_msgs::RobotTrajectory traj;
+                        success_fraction = pusher.computeCartesianPushPath(wp_target, 0.1 * distances[i-1], 3, traj);
+                        if(success_fraction == 1.0) {
+                            trajectories.push_back(traj);
+                            next_state->setJointGroupPositions(jmg, traj.joint_trajectory.points.back().positions);
+                            pusher.setStartState((*next_state));
                         } else {
-                            ROS_ERROR_STREAM("Failed planning cartesian push path: " << push_success * 100 << "%");
+                            ROS_ERROR_STREAM("Failed planning push trajectory step " << i+1 << " with success percentage " << success_fraction * 100 << "%");
+                            success = false;
+                            break;
                         }
-                    } else {
-                        ROS_ERROR_STREAM("Failed planning cartesian approach path: " << approach_success * 100 << "%");
                     }
+                    if(success) {
+                        ros::Duration planning_time = ros::Time::now() - start_time;
+                        ROS_ERROR_STREAM("ComputePushTrajectory finished after " << planning_time.toSec() << " seconds.");
+                        approach_traj = trajectories[0];
+                        push_traj = trajectories[1];
+                        retreat_traj = trajectories[2];
+                    }
+                    /*
+                    //compute cartesian path
+                    pusher.setStartState(start_state);
+                    std::vector<geometry_msgs::Pose> wp_target = {waypoints[1]};
+                    double approach_success = pusher.computeCartesianPushPath(wp_target, 0.1 * approach_distance, 3, approach_traj);
+                    if(approach_success == 1.0) {
+                    robot_state::RobotStatePtr rstate = pusher.getCurrentState();
+                    moveit_msgs::RobotState wp_state;
+                    const moveit::core::JointModelGroup* jmg = rstate->getJointModelGroup(pusher.getName());
+                    rstate->setJointGroupPositions(jmg, approach_traj.joint_trajectory.points.back().positions);
+                    moveit::core::robotStateToRobotStateMsg(*rstate, wp_state);
+                    pusher.setStartState(wp_state);
+                    wp_target = {waypoints[2]};
+                    double push_success = pusher.computeCartesianPushPath(wp_target, 0.1 * push.distance, 3, push_traj);
+                    if(push_success == 1.0) {
+                    rstate->setJointGroupPositions(jmg, push_traj.joint_trajectory.points.back().positions);
+                    moveit::core::robotStateToRobotStateMsg(*rstate, wp_state);
+                    pusher.setStartState(wp_state);
+                    wp_target = {waypoints[3]};
+                    double retreat_success = pusher.computeCartesianPushPath(wp_target, 0.1*retreat_distance, 3, retreat_traj);
+                    if(retreat_success == 1.0) {
+                    success = true;
+                    ros::Duration planning_time = ros::Time::now() - start_time;
+                    ROS_ERROR_STREAM("ComputePushTrajectory finished after " << planning_time.toSec() << " seconds.");
+                    } else {
+                    ROS_ERROR_STREAM("Failed planning cartesian retreat path: " << retreat_success * 100 << "%");
+                    }
+                    } else {
+                    ROS_ERROR_STREAM("Failed planning cartesian push path: " << push_success * 100 << "%");
+                    }
+                    } else {
+                    ROS_ERROR_STREAM("Failed planning cartesian approach path: " << approach_success * 100 << "%");
+                    }
+                     */
                 } else {
-                    ROS_WARN("Could not set start pose of push trajectory from IK!");
+                    ROS_ERROR_STREAM("Failed to plan push trajectory. Number of waypoints or distances is invalid!");
                 }
-                pusher.clearPoseTargets();
                 pusher.setStartStateToCurrentState();
                 return success;
             }
