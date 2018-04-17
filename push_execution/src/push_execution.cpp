@@ -18,6 +18,7 @@
 #include <eigen_conversions/eigen_msg.h>
 
 #include <visualization_msgs/Marker.h>
+#include <control_msgs/FollowJointTrajectoryActionResult.h>
 
 #include <ur5_pusher/pusher.h>
 #include <ur5_pusher/push_approach_sampler.h>
@@ -150,29 +151,26 @@ namespace tams_ur5_push_execution
                         if(!first_attempt_)
                             pusher.setPathConstraints(get_pusher_down_constraints());
 
-                        // Move to Pre-Push
-                        moveit::planning_interface::MoveGroupInterface::Plan move_to_obj;
-                        if(!pusher.plan(move_to_obj)) {
-                            ROS_ERROR("Failed at moving to box!");
+                        // plan move to box
+                        moveit::planning_interface::MoveGroupInterface::Plan move_to_box;
+                        if(!pusher.plan(move_to_box)) {
+                            ROS_ERROR("Failed planning of movement to box!");
                             return false;
                         }
 
                         bool is_executing = true;
+                        int trajectory_execution_result_code = -1;
+                        ros::Subscriber sub = nh_.subscribe<control_msgs::FollowJointTrajectoryActionResult>("/follow_joint_trajectory/result", 1, 
+                                [&] (const control_msgs::FollowJointTrajectoryActionResultConstPtr& msg)
+                                    {
+                                        is_executing = false;
+                                        trajectory_execution_result_code = msg->result.error_code;
+                                    });
 
-                        // joint state callback
-                        csm_->addUpdateCallback(
-                                [&] (const sensor_msgs::JointStateConstPtr& joint_state) {
-                                if(is_executing && joint_state->name.size()>0 && joint_state->name[0] == "ur5_shoulder_pan_joint") {
-                                rstate.setJointGroupPositions(pusher.getName(), joint_state->position);
-                                ROS_ERROR_STREAM_THROTTLE(2, "distance " << rstate.distance(start_state));
-
-                                if(rstate.distance(start_state) < 0.05) {
-                                is_executing = false;
-                                }
-                                }
-                                });
-
-                        pusher.asyncExecute(move_to_obj);
+                        if(!pusher.asyncExecute(move_to_box)) {
+                            ROS_ERROR("Failed execution of movement to box!");
+                            return false;
+                        }
 
                         // remove all path constraints
                         pusher.clearPathConstraints();
@@ -183,10 +181,14 @@ namespace tams_ur5_push_execution
                         // plan push
                         bool can_push = computeCartesianPushTraj(pusher, waypoints, distances, approach_traj, push_traj, retreat_traj, start_state);
 
+                        // wait for trajectory to finish
                         while(is_executing) {
                             ROS_WARN_THROTTLE(1, "Moving to approach pose.");
                         }
-                        csm_->clearUpdateCallbacks();
+                        if(trajectory_execution_result_code != 0) {
+                            ROS_ERROR("Failed at trajectory execution! Aborting push attempt.");
+                            return false;
+                        }
 
                         // move to pre_push pose on first attempt
                         if(execute_plan && can_push) {
@@ -302,7 +304,7 @@ namespace tams_ur5_push_execution
 
                 if(push_sampler_.sampleRandomPushApproach(push.approach))
                 {
-                    push.distance = 0.05;
+                    push.distance = 0.03;
                     visualizePushApproach(push.approach);
                     return true;
                 }
@@ -410,8 +412,8 @@ namespace tams_ur5_push_execution
                 approach_affine = obj_pose_affine * approach_affine * direction;
 
                 //trajectory distances
-                float approach_distance = 0.07;
-                float retreat_height = marker_.scale.z + 0.1;
+                float approach_distance = 0.05;
+                float retreat_height = marker_.scale.z + 0.08;
 
                 // fill waypoints
                 geometry_msgs::Pose start_wp, approach_wp, push_wp, retreat_wp;
@@ -527,7 +529,7 @@ namespace tams_ur5_push_execution
                 marker_stamp_ = marker.header.stamp;
             }
 
-            bool createCollisionObject(visualization_msgs::Marker& marker, float padding=0.02) {
+            bool createCollisionObject(visualization_msgs::Marker& marker, float padding=0.015) {
                 if(marker.type == visualization_msgs::Marker::CUBE) {
                     obj_.id = marker.header.frame_id + "_collision";
                     obj_.header.stamp = ros::Time(0);

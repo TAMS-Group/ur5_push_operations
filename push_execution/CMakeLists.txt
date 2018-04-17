@@ -13,6 +13,7 @@ find_package(catkin REQUIRED COMPONENTS
     object_recognition
 	std_msgs
 	visualization_msgs
+    control_msgs
 	moveit_msgs
 	moveit_core
 	moveit_ros_planning
