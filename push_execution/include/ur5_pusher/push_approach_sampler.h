@@ -20,7 +20,7 @@ const float MIN_TABLE_DISTANCE = 0.02;
 const float TIP_LENGTH = 0.08;
 
 // Range to restrict the object on the table
-const float SAFETY_RANGE = 0.05; // Outside of this range the object is pushed towards the center
+const float SAFETY_RANGE = 0.03; // Outside of this range the object is pushed towards the center
 const float EMERGENCY_RANGE = 0.3; // Outside of this range the experiment is aborted
 
 class PushApproachSampler
