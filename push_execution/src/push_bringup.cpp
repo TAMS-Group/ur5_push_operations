@@ -151,6 +151,9 @@ class PushExecutionClient {
             file << "approach.normal.y,";
             file << "approach.normal.z,";
             file << "approach.normal.w,";
+            file << "push.x,";
+            file << "push.y,";
+            file << "push.z,";
             file << "approach.angle,";
             file << "distance" << std::endl;
             file.close();
@@ -169,6 +172,13 @@ class PushExecutionClient {
             file << push.approach.normal.y << ",";
             file << push.approach.normal.z << ",";
             file << push.approach.normal.w << ",";
+            // represent push as vector
+            double x = std::sin(push.approach.angle + 0.5*M_PI) * push.distance;
+            double y = std::cos(push.approach.angle - 0.5*M_PI) * push.distance;
+            double z = 0.0;
+            file << x << ",";
+            file << y << ",";
+            file << z << ",";
             file << push.approach.angle << ",";
             file << push.distance << std::endl;
             file.close();
@@ -433,7 +443,7 @@ int main(int argc, char** argv) {
             pb.performRandomPushAction(1);
         } else if (input == COMMAND_PUSH_NONSTOP){
             std::cout << "Perform random push movement nonstop!" << std::endl;
-            if(pb.performRandomPushAction()) {
+            if(pb.performRandomPushAction(0)) {
                 std::cout << "To terminate this operation, press <Enter>" << std::endl;
                 std::getline(std::cin, input);
                 pb.abortRandomPushAction();
