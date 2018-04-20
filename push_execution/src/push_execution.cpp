@@ -117,6 +117,7 @@ namespace tams_ur5_push_execution
                     Push push;
 
                     // create push message
+		    ros::Duration(0.5).sleep();
                     if(!createRandomPushMsg(push))
                         return false;
 
@@ -129,14 +130,14 @@ namespace tams_ur5_push_execution
 
                     robot_state::RobotState rstate(*pusher.getCurrentState());
 
-                    std::vector<geometry_msgs::Pose> waypoints;
+                    std::vector<std::vector<geometry_msgs::Pose>> waypoints;
                     std::vector<double> distances;
 
                     getPushWaypoints(push, waypoints, distances);
 
                     // start state to be set from IK
                     geometry_msgs::PoseStamped ps;
-                    ps.pose = waypoints.front();
+                    ps.pose = waypoints.front().front();
                     ps.header.frame_id = "table_top";
                     tf_listener_.transformPose(pusher.getPlanningFrame(), ps, ps);
 
@@ -159,12 +160,18 @@ namespace tams_ur5_push_execution
                         }
 
                         bool is_executing = true;
+                        bool can_push = false;
                         int trajectory_execution_result_code = -1;
                         ros::Subscriber sub = nh_.subscribe<control_msgs::FollowJointTrajectoryActionResult>("/follow_joint_trajectory/result", 1, 
                                 [&] (const control_msgs::FollowJointTrajectoryActionResultConstPtr& msg)
                                     {
-                                        is_executing = false;
-                                        trajectory_execution_result_code = msg->result.error_code;
+                                        if(is_executing) {
+                                            is_executing = false;
+                                            trajectory_execution_result_code = msg->result.error_code;
+                                            if(can_push) { // if already finished planning - have a short break!
+                                                ros::Duration(0.5).sleep();
+                                            }
+                                        }
                                     });
 
                         if(!pusher.asyncExecute(move_to_box)) {
@@ -179,7 +186,7 @@ namespace tams_ur5_push_execution
                         removeCollisionObject();
 
                         // plan push
-                        bool can_push = computeCartesianPushTraj(pusher, waypoints, distances, approach_traj, push_traj, retreat_traj, start_state);
+                        can_push = computeCartesianPushTraj(pusher, waypoints, distances, approach_traj, push_traj, retreat_traj, start_state);
 
                         // wait for trajectory to finish
                         while(is_executing) {
@@ -187,6 +194,18 @@ namespace tams_ur5_push_execution
                         }
                         if(trajectory_execution_result_code != 0) {
                             ROS_ERROR("Failed at trajectory execution! Aborting push attempt.");
+                            return false;
+                        }
+                        if(!can_push) {
+                            ROS_ERROR("Failed to plan push trajectory - Moving back!");
+                            robot_trajectory::RobotTrajectory traj(pusher.getRobotModel(), pusher.getName());
+                            moveit::planning_interface::MoveGroupInterface::Plan move_back;
+                            traj.setRobotTrajectoryMsg((*pusher.getCurrentState()), move_to_box.trajectory_);
+                            traj.reverse();
+                            traj.getRobotTrajectoryMsg(move_back.trajectory_);
+                            recomputeTimestamps(pusher, move_back.trajectory_);
+                            applyCollisionObject();
+                            pusher.execute(move_back);
                             return false;
                         }
 
@@ -220,9 +239,8 @@ namespace tams_ur5_push_execution
                             append_traj.setRobotTrajectoryMsg(contact_state, push_traj);
                             traj.append(append_traj, 0.0);
                             // perform iterative time parameterization
-                            trajectory_processing::IterativeSplineParameterization isp;
-                            isp.computeTimeStamps(traj, 3.14, 1.0);
                             traj.getRobotTrajectoryMsg(push_plan.trajectory_);
+                            recomputeTimestamps(pusher, push_plan.trajectory_);
 
                             take_snapshot(std::to_string(feedback.id) + "_1_before");
 
@@ -235,9 +253,9 @@ namespace tams_ur5_push_execution
 
                             // retreat trajectory
                             pusher.getCurrentState()->copyJointGroupPositions("arm", retreat_traj.joint_trajectory.points[0].positions);
-                            traj.setRobotTrajectoryMsg((*pusher.getCurrentState()), retreat_traj);
-                            isp.computeTimeStamps(traj, 3.14, 1.0);
-                            traj.getRobotTrajectoryMsg(push_plan.trajectory_);
+                            recomputeTimestamps(pusher, retreat_traj);
+                            push_plan.trajectory_ = retreat_traj;
+
                             pusher.execute(push_plan);
 
                             // Observe Relocation
@@ -274,6 +292,16 @@ namespace tams_ur5_push_execution
             }
 
         private:
+
+            void recomputeTimestamps(ur5_pusher::Pusher& pusher, moveit_msgs::RobotTrajectory& trajectory_msg, double max_vel=3.14, double max_accel=1.0) {
+
+                robot_trajectory::RobotTrajectory traj(pusher.getRobotModel(), pusher.getName());
+                traj.setRobotTrajectoryMsg((*pusher.getCurrentState()), trajectory_msg);
+                //trajectory_processing::IterativeSplineParameterization isp;
+                trajectory_processing::IterativeParabolicTimeParameterization isp;
+                isp.computeTimeStamps(traj, max_vel, max_accel);
+                traj.getRobotTrajectoryMsg(trajectory_msg);
+            }
 
             void applyCollisionObject() {
                 std_msgs::ColorRGBA color;
@@ -377,7 +405,7 @@ namespace tams_ur5_push_execution
                 return obj_pose_affine;
             }
 
-            bool getPushWaypoints(tams_ur5_push_execution::Push& push, std::vector<geometry_msgs::Pose>& waypoints, std::vector<double>& wp_distances) {
+            bool getPushWaypoints(tams_ur5_push_execution::Push& push, std::vector<std::vector<geometry_msgs::Pose>>& waypoints, std::vector<double>& wp_distances) {
 
                 // object pose
                 geometry_msgs::PoseStamped obj_pose;
@@ -403,10 +431,10 @@ namespace tams_ur5_push_execution
 
                 //trajectory distances
                 float approach_distance = 0.05;
-                float retreat_height = marker_.scale.z + 0.08;
+                float retreat_height = marker_.scale.z + 0.05;
 
                 // fill waypoints
-                geometry_msgs::Pose start_wp, approach_wp, push_wp, retreat_wp;
+                geometry_msgs::Pose start_wp, approach_wp, push_wp, retreat_low_wp, retreat_high_wp;
                 geometry_msgs::Quaternion orientation;
                 orientation.w = 1.0;
 
@@ -423,17 +451,26 @@ namespace tams_ur5_push_execution
                 tf::poseEigenToMsg(approach_affine * wp, push_wp);
                 push_wp.orientation = orientation;
 
-                wp.translate(Eigen::Vector3d(-push.distance, 0.0, retreat_height));
-                tf::poseEigenToMsg(approach_affine * wp, retreat_wp);
-                retreat_wp.orientation = orientation;
+                wp.translate(Eigen::Vector3d(-0.015, 0.0, 0.0));
+                tf::poseEigenToMsg(approach_affine * wp, retreat_low_wp);
+                retreat_low_wp.orientation = orientation;
 
-                waypoints = {start_wp, approach_wp, push_wp, retreat_wp};
+                wp.translate(Eigen::Vector3d(0.0, 0.0, retreat_height));
+                tf::poseEigenToMsg(approach_affine * wp, retreat_high_wp);
+                retreat_high_wp.orientation = orientation;
+
+		std::vector<geometry_msgs::Pose> start_wps = {start_wp};
+		std::vector<geometry_msgs::Pose> approach_wps = {approach_wp};
+		std::vector<geometry_msgs::Pose> push_wps = {push_wp};
+		std::vector<geometry_msgs::Pose> retreat_wps = {retreat_low_wp, retreat_high_wp};
+
+                waypoints = {start_wps, approach_wps, push_wps, retreat_wps};
 
                 double retreat_distance = std::sqrt(std::pow(push.distance,2) + std::pow(retreat_height, 2));
                 wp_distances = {approach_distance, push.distance, retreat_distance};
             }
 
-            bool computeCartesianPushTraj(ur5_pusher::Pusher& pusher, const std::vector<geometry_msgs::Pose> waypoints, const std::vector<double> distances, moveit_msgs::RobotTrajectory& approach_traj, moveit_msgs::RobotTrajectory& push_traj, moveit_msgs::RobotTrajectory& retreat_traj, const robot_state::RobotState start_state)
+            bool computeCartesianPushTraj(ur5_pusher::Pusher& pusher, std::vector<std::vector<geometry_msgs::Pose>> waypoints, const std::vector<double> distances, moveit_msgs::RobotTrajectory& approach_traj, moveit_msgs::RobotTrajectory& push_traj, moveit_msgs::RobotTrajectory& retreat_traj, const robot_state::RobotState start_state)
             {
                 ros::Time start_time = ros::Time::now();
                 bool success = false;
@@ -451,9 +488,8 @@ namespace tams_ur5_push_execution
                     int i;
                     double success_fraction;
                     for(i=1; i < waypoints.size(); i++) {
-                        wp_target = {waypoints[i]};
                         moveit_msgs::RobotTrajectory traj;
-                        success_fraction = pusher.computeCartesianPushPath(wp_target, 0.1 * distances[i-1], 3, traj);
+                        success_fraction = pusher.computeCartesianPushPath(waypoints[i], 0.1 * distances[i-1], 3, traj);
                         if(success_fraction == 1.0) {
                             trajectories.push_back(traj);
                             next_state->setJointGroupPositions(jmg, traj.joint_trajectory.points.back().positions);
@@ -602,6 +638,7 @@ namespace tams_ur5_push_execution
                         if(push_execution_->performRandomPush(pusher_, feedback, execute_)) {
                             as_.publishFeedback(feedback);
                             success_count++;
+                            failed_in_a_row = 0;
                         } else if(failed_in_a_row++ == 10) {
                             ROS_ERROR("Pusher goal action aborted after 10 failed attempts in a row!");
                             success = false;
