@@ -275,16 +275,6 @@ namespace tams_ur5_push_execution
 
         private:
 
-            moveit_msgs::RobotTrajectory& readjustTrajectory(ur5_pusher::Pusher& pusher, moveit_msgs::RobotTrajectory& traj_msg, moveit_msgs::RobotTrajectory& target_traj) {
-                // Use current state as first trajectory point and recompute timestamps
-                pusher.getCurrentState()->copyJointGroupPositions("arm", traj_msg.joint_trajectory.points[0].positions);
-                trajectory_processing::IterativeParabolicTimeParameterization iptp;
-                robot_trajectory::RobotTrajectory traj(pusher.getRobotModel(), pusher.getName());
-                traj.setRobotTrajectoryMsg((*pusher.getCurrentState()), traj_msg);
-                iptp.computeTimeStamps(traj, 0.4, 0.8);
-                traj.getRobotTrajectoryMsg(target_traj);
-            }
-
             void applyCollisionObject() {
                 std_msgs::ColorRGBA color;
                 color.r = 0.5;
