@@ -25,7 +25,7 @@ find_package(catkin REQUIRED COMPONENTS
 
 add_action_files(
 	DIRECTORY action 
-	FILES ExplorePushes.action
+	FILES ExplorePushes.action MoveObject.action
 )
 
 add_message_files(
@@ -38,6 +38,7 @@ add_service_files(
 	FILES
 	PerformRandomPush.srv
 	PusherMovement.srv
+	SamplePredictivePush.srv
 )
 
 generate_messages(

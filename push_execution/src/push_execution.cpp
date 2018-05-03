@@ -27,7 +27,11 @@
 #include <tams_ur5_push_execution/PushApproach.h>
 #include <tams_ur5_push_execution/PerformRandomPush.h>
 #include <tams_ur5_push_execution/PusherMovement.h>
+#include <tams_ur5_push_execution/SamplePredictivePush.h>
+
+
 #include <tams_ur5_push_execution/ExplorePushesAction.h>
+#include <tams_ur5_push_execution/MoveObjectAction.h>
 
 #include <object_recognition/ImageDump.h>
 
@@ -103,19 +107,44 @@ namespace tams_ur5_push_execution
                 take_snapshots_ = true;
             }
 
+
             bool performRandomPush(ur5_pusher::Pusher& pusher, ExplorePushesFeedback& feedback, bool execute_plan=true) 
+            {
+                Push push;
+                ros::Duration(0.5).sleep();
+                if (isObjectClear() && createRandomPushMsg(push)) {
+                    feedback.push = push;
+                    tf::poseEigenToMsg(getObjectTransform(push.approach.frame_id), feedback.pre_push);
+                    bool success = performPush(pusher, push, feedback.id, execute_plan);
+                    // Observe Relocation
+                    tf::poseEigenToMsg(getObjectTransform(push.approach.frame_id), feedback.post_push);
+                    return success;
+                } else {
+                    return false;
+                }
+            }
+
+            bool performPush(ur5_pusher::Pusher& pusher, const Push& push, MoveObjectFeedback& feedback, bool execute_plan=true) 
+            {
+                ros::Duration(0.5).sleep();
+                if (isObjectClear()) {
+                    feedback.push = push;
+                    tf::poseEigenToMsg(getObjectTransform(push.approach.frame_id), feedback.pre_push);
+                    bool success = performPush(pusher, push, feedback.id, execute_plan);
+                    // Observe Relocation
+                    tf::poseEigenToMsg(getObjectTransform(push.approach.frame_id), feedback.post_push);
+                    return success;
+                } else {
+                    return false;
+                }
+            }
+
+            bool performPush(ur5_pusher::Pusher& pusher, const Push& push, int attempt_id, bool execute_plan=true) 
             {
                 if(isObjectClear()) {
 
                     pusher.setPlannerId("RRTConnectkConfigDefault");
                     pusher.setPlanningTime(5.0);
-
-                    Push push;
-
-                    // create push message
-                    ros::Duration(0.5).sleep();
-                    if(!createRandomPushMsg(push))
-                        return false;
 
                     //remove collision object in case the last attempt failed
                     removeCollisionObject();
@@ -139,9 +168,6 @@ namespace tams_ur5_push_execution
 
                     if(pusher.setPusherJointValueTarget(ps)) {
                         robot_state::RobotState start_state = pusher.getJointValueTarget();
-
-                        // Get Pre-push pose of object
-                        tf::poseEigenToMsg(getObjectTransform(push.approach.frame_id), feedback.pre_push);
 
                         // apply collision object before moving to pre_push
                         applyCollisionObject();
@@ -222,7 +248,7 @@ namespace tams_ur5_push_execution
 
                                     if(rstate.distance(contact_state) < 0.03) {
                                     contact_shot = true;
-                                    take_snapshot(std::to_string(feedback.id) + "_2_contact");
+                                    take_snapshot(std::to_string(attempt_id) + "_2_contact");
                                     }
                                     }
                                     });
@@ -238,14 +264,14 @@ namespace tams_ur5_push_execution
                             traj.getRobotTrajectoryMsg(push_plan.trajectory_);
                             recomputeTimestamps(pusher, push_plan.trajectory_);
 
-                            take_snapshot(std::to_string(feedback.id) + "_1_before");
+                            take_snapshot(std::to_string(attempt_id) + "_1_before");
 
                             // EXECUTE PUSH
                             pusher.execute(push_plan);
 
                             csm_->clearUpdateCallbacks();
 
-                            take_snapshot(std::to_string(feedback.id) + "_3_after");
+                            take_snapshot(std::to_string(attempt_id) + "_3_after");
 
                             // retreat trajectory
                             pusher.getCurrentState()->copyJointGroupPositions("arm", retreat_traj.joint_trajectory.points[0].positions);
@@ -254,13 +280,9 @@ namespace tams_ur5_push_execution
 
                             pusher.execute(push_plan);
 
-                            // Observe Relocation
-                            tf::poseEigenToMsg(getObjectTransform(push.approach.frame_id), feedback.post_push);
-                            feedback.push = push;
                             first_attempt_ = false;
                             return true;
                         }
-
                     } else {
                         ROS_INFO_STREAM("Failed to plan and execute push trajectory!");
                     }
@@ -285,6 +307,22 @@ namespace tams_ur5_push_execution
             void reset()
             {
                 first_attempt_ = true;
+            }
+
+            geometry_msgs::Pose getObjectPose(const std::string& obj_frame, const std::string& target_frame="table_top")
+            {
+                geometry_msgs::PoseStamped obj_pose;
+                obj_pose.header.frame_id = obj_frame;
+                obj_pose.pose.orientation.w = 1.0;
+                tf_listener_.transformPose(target_frame, obj_pose, obj_pose);
+                return obj_pose.pose;
+            }
+
+            Eigen::Affine3d getObjectTransform(const std::string& obj_frame, const std::string& target_frame="table_top")
+            {
+                Eigen::Affine3d obj_pose_affine;
+                tf::poseMsgToEigen(getObjectPose(obj_frame, target_frame), obj_pose_affine);
+                return obj_pose_affine;
             }
 
         private:
@@ -404,18 +442,9 @@ namespace tams_ur5_push_execution
                 contact_point_pub_.publish(approach);
             }
 
-            Eigen::Affine3d getObjectTransform(const std::string& obj_frame, const std::string& target_frame="table_top")
-            {
-                geometry_msgs::PoseStamped obj_pose;
-                obj_pose.header.frame_id = obj_frame;
-                obj_pose.pose.orientation.w = 1.0;
-                tf_listener_.transformPose(target_frame, obj_pose, obj_pose);
-                Eigen::Affine3d obj_pose_affine;
-                tf::poseMsgToEigen(obj_pose.pose, obj_pose_affine);
-                return obj_pose_affine;
-            }
 
-            bool getPushWaypoints(tams_ur5_push_execution::Push& push, std::vector<std::vector<geometry_msgs::Pose>>& waypoints, std::vector<double>& wp_distances) {
+
+            bool getPushWaypoints(const tams_ur5_push_execution::Push& push, std::vector<std::vector<geometry_msgs::Pose>>& waypoints, std::vector<double>& wp_distances) {
 
                 // object pose
                 geometry_msgs::PoseStamped obj_pose;
@@ -593,8 +622,11 @@ namespace tams_ur5_push_execution
             ur5_pusher::Pusher pusher_;
 
             actionlib::SimpleActionServer<ExplorePushesAction> explore_pushes_server_;
+            actionlib::SimpleActionServer<MoveObjectAction> move_object_server_;
 
             ros::ServiceServer execution_service_;
+
+            ros::ServiceClient push_sampler_;
 
 
             bool service_busy_ = false;
@@ -676,14 +708,117 @@ namespace tams_ur5_push_execution
                 service_busy_ = false;
             }
 
+            void acceptMoveObjectGoal()
+            {
+                MoveObjectGoal goal = (*move_object_server_.acceptNewGoal());
+                MoveObjectFeedback feedback;
+                MoveObjectResult result;
+                result.attempts = 0;
+                ros::Time start_time = ros::Time::now();
+                int success = true;
+                int preempted = false;
+                if(!service_busy_ && isPusherAvailable()) {
+                    push_execution_->reset();
+                    service_busy_ = true;
+                    int success_count = 0;
+                    int failed_in_a_row = 0;
+
+                    // check if goal is reached!
+                    while (getGoalTargetError(goal) > 0.1) {
+                        feedback.id = id_count_;
+
+                        // preempt goal if canceled
+                        if(move_object_server_.isPreemptRequested()) {
+                            ROS_WARN_STREAM("Preempt requested - canceling goal!");
+                            preempted = true;
+                            break;
+                        }
+
+                        // perform new attempt and publish feedback
+                        result.attempts++;
+                        id_count_++;
+
+                        Push push;
+                        if(!getNextPush(goal, push)) {
+                            ROS_ERROR("Could not sample push for some reason!");
+                            continue;
+                        }
+                        if(push_execution_->performPush(pusher_, push, feedback, execute_)) {
+                            move_object_server_.publishFeedback(feedback);
+                            success_count++;
+                            failed_in_a_row = 0;
+                        } else if(failed_in_a_row++ == 10) {
+                            ROS_ERROR("Pusher goal action aborted after 10 failed attempts in a row!");
+                            success = false;
+                            break;
+                        }
+                    }
+                } else {
+                    // abort since service is not available
+                    success = false;
+                }
+
+
+                // stop elapsed time
+                result.elapsed_time = ros::Time::now() - start_time;
+
+                // send result
+                if(success)
+                    move_object_server_.setSucceeded(result);
+                else if(preempted)
+                    move_object_server_.setPreempted(result);
+                else
+                    move_object_server_.setAborted(result);
+
+                // free service
+                service_busy_ = false;
+            }
+
+
+            double getGoalTargetError(MoveObjectGoal& goal) {
+                return getObjectTargetError(push_execution_->getObjectPose(goal.object_id), goal.target);
+            }
+
+            double getObjectTargetError(const geometry_msgs::Pose& object_pose, const geometry_msgs::Pose& target) {
+                double x_diff = object_pose.position.x - target.position.x;
+                double y_diff = object_pose.position.y - target.position.y;
+                double distance = sqrt(pow(x_diff,2) + pow(y_diff,2));
+
+                tf::Quaternion q_obj;
+                tf::Quaternion q_tar;
+                tf::quaternionMsgToTF(object_pose.orientation, q_obj);
+                tf::quaternionMsgToTF(target.orientation, q_tar);
+                tf::Quaternion q_diff = q_obj - q_tar;
+                double yaw = abs(tf::getYaw(q_diff));
+                // this is not an accurate error estimate since distance and yaw angle are scaled differently
+                // However it works for finding a good solution.
+                // Example of sufficient error cost: distance<=0.05, yaw<=0.05 => error<=0.1
+                return sqrt(pow(distance, 2) + pow(yaw, 2));
+            }
+
+
+            /*
+            * Calls the push sampler service to query a new push
+            */
+            bool getNextPush(MoveObjectGoal& goal, Push& push) {
+                SamplePredictivePush srv;
+                srv.request.object_id = goal.object_id;
+                srv.request.object_pose = push_execution_->getObjectPose(goal.object_id);
+                srv.request.target = goal.target;
+                bool success = push_sampler_.call(srv) && srv.response.success;
+                push = srv.response.push;
+                return success;
+            }
+
         public:
 
-            PushExecutionServer(ros::NodeHandle& nh, std::string group_name) : pusher_(group_name), explore_pushes_server_(nh, "explore_pushes_action", true)
+            PushExecutionServer(ros::NodeHandle& nh, std::string group_name) : pusher_(group_name), explore_pushes_server_(nh, "explore_pushes_action", true), move_object_server_(nh, "move_object_action", true)
         {
             ros::NodeHandle pnh("~");
             pnh.param("take_snapshots", take_snapshots_, false);
             pnh.param("execute", execute_, false);
             execution_service_ = nh.advertiseService("point_at_box", &PushExecutionServer::pointAtBox, this);
+            push_sampler_= nh.serviceClient<SamplePredictivePush>("predictive_push_sampler");
 
             isPusherAvailable();
             push_execution_ = new PushExecution();
@@ -695,6 +830,8 @@ namespace tams_ur5_push_execution
                 if(!service_busy_)
 			if(explore_pushes_server_.isNewGoalAvailable())
                     		acceptExplorePushesGoal();
+			if(move_object_server_.isNewGoalAvailable())
+                    		acceptMoveObjectGoal();
                 rate.sleep();
             }
         }
