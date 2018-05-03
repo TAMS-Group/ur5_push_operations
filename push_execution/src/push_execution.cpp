@@ -592,7 +592,7 @@ namespace tams_ur5_push_execution
             PushExecution* push_execution_;
             ur5_pusher::Pusher pusher_;
 
-            actionlib::SimpleActionServer<ExplorePushesAction> as_;
+            actionlib::SimpleActionServer<ExplorePushesAction> explore_pushes_server_;
 
             ros::ServiceServer execution_service_;
 
@@ -618,9 +618,9 @@ namespace tams_ur5_push_execution
                 return true;
             }
 
-            void acceptGoal()
+            void acceptExplorePushesGoal()
             {
-                ExplorePushesGoal goal = (*as_.acceptNewGoal());
+                ExplorePushesGoal goal = (*explore_pushes_server_.acceptNewGoal());
                 ExplorePushesFeedback feedback;
                 ExplorePushesResult result;
                 result.attempts = 0;
@@ -636,7 +636,7 @@ namespace tams_ur5_push_execution
                         feedback.id = id_count_;
 
                         // preempt goal if canceled
-                        if(as_.isPreemptRequested()) {
+                        if(explore_pushes_server_.isPreemptRequested()) {
                             ROS_WARN_STREAM("Preempt requested - canceling goal!");
                             preempted = true;
                             break;
@@ -646,7 +646,7 @@ namespace tams_ur5_push_execution
                         result.attempts++;
                         id_count_++;
                         if(push_execution_->performRandomPush(pusher_, feedback, execute_)) {
-                            as_.publishFeedback(feedback);
+                            explore_pushes_server_.publishFeedback(feedback);
                             success_count++;
                             failed_in_a_row = 0;
                         } else if(failed_in_a_row++ == 10) {
@@ -666,11 +666,11 @@ namespace tams_ur5_push_execution
 
                 // send result
                 if(success)
-                    as_.setSucceeded(result);
+                    explore_pushes_server_.setSucceeded(result);
                 else if(preempted)
-                    as_.setPreempted(result);
+                    explore_pushes_server_.setPreempted(result);
                 else
-                    as_.setAborted(result);
+                    explore_pushes_server_.setAborted(result);
 
                 // free service
                 service_busy_ = false;
@@ -678,7 +678,7 @@ namespace tams_ur5_push_execution
 
         public:
 
-            PushExecutionServer(ros::NodeHandle& nh, std::string group_name) : pusher_(group_name), as_(nh, "explore_pushes_action", true)
+            PushExecutionServer(ros::NodeHandle& nh, std::string group_name) : pusher_(group_name), explore_pushes_server_(nh, "explore_pushes_action", true)
         {
             ros::NodeHandle pnh("~");
             pnh.param("take_snapshots", take_snapshots_, false);
@@ -692,8 +692,9 @@ namespace tams_ur5_push_execution
 
             ros::Rate rate(2);
             while(ros::ok()){
-                if(!service_busy_ && as_.isNewGoalAvailable())
-                    acceptGoal();
+                if(!service_busy_)
+			if(explore_pushes_server_.isNewGoalAvailable())
+                    		acceptExplorePushesGoal();
                 rate.sleep();
             }
         }
