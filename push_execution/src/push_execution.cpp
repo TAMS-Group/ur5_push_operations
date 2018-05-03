@@ -105,11 +105,7 @@ namespace tams_ur5_push_execution
 
             bool performRandomPush(ur5_pusher::Pusher& pusher, ExplorePushesFeedback& feedback, bool execute_plan=true) 
             {
-                if(!marker_.header.frame_id.empty()) {
-                    if(ros::Time(0) - marker_stamp_ > ros::Duration(0.5)) {
-                        ROS_WARN_THROTTLE(10, "Marker not up to date, skipping push");
-                        return false;
-                    }
+                if(isObjectClear()) {
 
                     pusher.setPlannerId("RRTConnectkConfigDefault");
                     pusher.setPlanningTime(5.0);
@@ -117,7 +113,7 @@ namespace tams_ur5_push_execution
                     Push push;
 
                     // create push message
-		    ros::Duration(0.5).sleep();
+                    ros::Duration(0.5).sleep();
                     if(!createRandomPushMsg(push))
                         return false;
 
@@ -292,6 +288,20 @@ namespace tams_ur5_push_execution
             }
 
         private:
+
+            bool isObjectClear() {
+                // check if we have an object
+                if (marker_.header.frame_id.empty()) {
+                    ROS_WARN_THROTTLE(10, "Could not find any pushable object! Skipping current push.");
+                    return false;
+                }
+                // check if the objects frame is up to date
+                if(ros::Time(0) - marker_stamp_ > ros::Duration(0.5)) {
+                    ROS_WARN_THROTTLE(10, "Object frame not up to date! Skipping current push.");
+                    return false;
+                }
+                return true;
+            }
 
             void recomputeTimestamps(ur5_pusher::Pusher& pusher, moveit_msgs::RobotTrajectory& trajectory_msg, double max_vel=3.14, double max_accel=1.0) {
 
