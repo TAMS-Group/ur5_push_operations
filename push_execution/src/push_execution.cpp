@@ -761,8 +761,10 @@ namespace tams_ur5_push_execution
                         // have we reached our goal?
                         double error = getGoalTargetError(goal);
                         ROS_ERROR_STREAM("Error: " << error);
-                        if(error < 0.1)
+                        if(error < 0.1) {
+                            ROS_ERROR_STREAM("Goal position reached successfully!");
                             break;
+                        }
 
 
                         // perform new attempt and publish feedback
