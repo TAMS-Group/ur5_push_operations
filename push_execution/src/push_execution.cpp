@@ -109,6 +109,10 @@ namespace tams_ur5_push_execution
                 take_snapshots_ = true;
             }
 
+            void disableSnapshots() {
+                take_snapshots_ = true;
+            }
+
 
             bool performRandomPush(ur5_pusher::Pusher& pusher, ExplorePushesFeedback& feedback, bool execute_plan=true) 
             {
@@ -241,20 +245,23 @@ namespace tams_ur5_push_execution
                             robot_state::RobotState contact_state(rstate);
                             contact_state.setJointGroupPositions(pusher.getName(), approach_traj.joint_trajectory.points.back().positions);
 
-                            bool contact_shot = false;
+                            if(take_snapshots_) {
 
-                            // joint state callback
-                            csm_->addUpdateCallback(
-                                    [&] (const sensor_msgs::JointStateConstPtr& joint_state) {
-                                    if(!contact_shot && joint_state->name.size()>0 && joint_state->name[0] == "ur5_shoulder_pan_joint") {
-                                    rstate.setJointGroupPositions(pusher.getName(), joint_state->position);
+                                bool contact_shot = false;
 
-                                    if(rstate.distance(contact_state) < 0.03) {
-                                    contact_shot = true;
-                                    take_snapshot(std::to_string(attempt_id) + "_2_contact");
-                                    }
-                                    }
-                                    });
+                                // joint state callback
+                                csm_->addUpdateCallback(
+                                        [&] (const sensor_msgs::JointStateConstPtr& joint_state) {
+                                        if(!contact_shot && joint_state->name.size()>0 && joint_state->name[0] == "ur5_shoulder_pan_joint") {
+                                        rstate.setJointGroupPositions(pusher.getName(), joint_state->position);
+
+                                        if(rstate.distance(contact_state) < 0.03) {
+                                        contact_shot = true;
+                                        take_snapshot(std::to_string(attempt_id) + "_2_contact");
+                                        }
+                                        }
+                                        });
+                            }
 
                             // concatenate trajectory parts
                             pusher.getCurrentState()->copyJointGroupPositions("arm", approach_traj.joint_trajectory.points[0].positions);
@@ -267,14 +274,16 @@ namespace tams_ur5_push_execution
                             traj.getRobotTrajectoryMsg(push_plan.trajectory_);
                             recomputeTimestamps(pusher, push_plan.trajectory_);
 
-                            take_snapshot(std::to_string(attempt_id) + "_1_before");
+                            if(take_snapshots_)
+                                take_snapshot(std::to_string(attempt_id) + "_1_before");
 
                             // EXECUTE PUSH
                             pusher.execute(push_plan);
 
                             csm_->clearUpdateCallbacks();
 
-                            take_snapshot(std::to_string(attempt_id) + "_3_after");
+                            if(take_snapshots_)
+                                take_snapshot(std::to_string(attempt_id) + "_3_after");
 
                             // retreat trajectory
                             pusher.getCurrentState()->copyJointGroupPositions("arm", retreat_traj.joint_trajectory.points[0].positions);
