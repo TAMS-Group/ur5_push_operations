@@ -655,7 +655,6 @@ namespace tams_ur5_push_execution
             bool isPusherAvailable()
             {
                 if(!pusher_.isPusherAttached() && !pusher_.loadFromAttachedObject()) {
-                    ROS_WARN_STREAM("PushExecutionServer is running but no pusher is attached to group '" << pusher_.getName() << "'.");
                     return false;
                 }
                 return true;
