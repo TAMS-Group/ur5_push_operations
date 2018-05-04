@@ -5,6 +5,8 @@
 #include <moveit/planning_scene/planning_scene.h>
 #include <moveit/planning_scene_monitor/planning_scene_monitor.h>
 #include <moveit_msgs/CollisionObject.h>
+#include <moveit_msgs/ExecuteTrajectoryActionResult.h>
+
 
 #include <moveit/trajectory_processing/iterative_spline_parameterization.h>
 #include <moveit/robot_state/robot_state.h>
@@ -183,13 +185,13 @@ namespace tams_ur5_push_execution
 
                         bool is_executing = true;
                         bool can_push = false;
-                        int trajectory_execution_result_code = -1;
-                        ros::Subscriber sub = nh_.subscribe<control_msgs::FollowJointTrajectoryActionResult>("/follow_joint_trajectory/result", 1, 
-                                [&] (const control_msgs::FollowJointTrajectoryActionResultConstPtr& msg)
+                        int trajectory_execution_result_code = 0;
+                        ros::Subscriber sub = nh_.subscribe<moveit_msgs::ExecuteTrajectoryActionResult>("/execute_trajectory/result", 1,
+                                [&] (const moveit_msgs::ExecuteTrajectoryActionResultConstPtr& msg)
                                     {
                                         if(is_executing) {
                                             is_executing = false;
-                                            trajectory_execution_result_code = msg->result.error_code;
+                                            trajectory_execution_result_code = msg->result.error_code.val;
                                             if(can_push) { // if already finished planning - have a short break!
                                                 ros::Duration(0.5).sleep();
                                             }
@@ -212,9 +214,10 @@ namespace tams_ur5_push_execution
 
                         // wait for trajectory to finish
                         while(is_executing) {
-                            ROS_WARN_THROTTLE(1, "Moving to approach pose.");
+                            ROS_ERROR_THROTTLE(1, "Moving to approach pose.");
                         }
-                        if(trajectory_execution_result_code != 0) {
+                        pusher.setStartStateToCurrentState();
+                        if(trajectory_execution_result_code != moveit_msgs::MoveItErrorCodes::SUCCESS) {
                             ROS_ERROR("Failed at trajectory execution! Aborting push attempt.");
                             return false;
                         }
