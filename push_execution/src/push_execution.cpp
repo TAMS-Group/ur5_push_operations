@@ -182,6 +182,7 @@ namespace tams_ur5_push_execution
 
                         // plan move to box
                         moveit::planning_interface::MoveGroupInterface::Plan move_to_box;
+                        pusher.setStartStateToCurrentState();
                         if(!pusher.plan(move_to_box)) {
                             ROS_ERROR("Failed planning of movement to box!");
                             return false;
@@ -280,7 +281,8 @@ namespace tams_ur5_push_execution
                             // EXECUTE PUSH
                             pusher.execute(push_plan);
 
-                            csm_->clearUpdateCallbacks();
+                            if(take_snapshots_)
+                                csm_->clearUpdateCallbacks();
 
                             if(take_snapshots_)
                                 take_snapshot(std::to_string(attempt_id) + "_3_after");
