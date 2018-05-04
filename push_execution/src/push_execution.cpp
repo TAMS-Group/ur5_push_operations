@@ -855,15 +855,19 @@ namespace tams_ur5_push_execution
             if(execute_ && take_snapshots_)
                 push_execution_->enableSnapshots();
 
+
             ros::Rate rate(2);
-            while(ros::ok()){
-                if(!service_busy_)
-			if(explore_pushes_server_.isNewGoalAvailable())
-                    		acceptExplorePushesGoal();
-			if(move_object_server_.isNewGoalAvailable())
-                    		acceptMoveObjectGoal();
-                rate.sleep();
-            }
+	    while(ros::ok()){
+		    if(!service_busy_) {
+			    if(explore_pushes_server_.isNewGoalAvailable()) {
+				    acceptExplorePushesGoal();
+			    }
+			    if(move_object_server_.isNewGoalAvailable()) {
+				    acceptMoveObjectGoal();
+			    }
+		    }
+		    rate.sleep();
+	    }
         }
     };
 }
