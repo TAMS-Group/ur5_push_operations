@@ -761,7 +761,7 @@ namespace tams_ur5_push_execution
                         // have we reached our goal?
                         double error = getGoalTargetError(goal);
                         ROS_ERROR_STREAM("Error: " << error);
-                        if(error < 0.1) {
+                        if(error < 0.015) {
                             ROS_ERROR_STREAM("Goal position reached successfully!");
                             break;
                         }
@@ -822,11 +822,13 @@ namespace tams_ur5_push_execution
                 tf::Quaternion q_tar;
                 tf::quaternionMsgToTF(object_pose.orientation, q_obj);
                 tf::quaternionMsgToTF(target.orientation, q_tar);
-                double yaw = tf::getYaw(q_obj.inverse() * q_tar);
+                double yaw = std::fmod(tf::getYaw(q_obj.inverse() * q_tar), 2*M_PI);
+		double yaw_diff = 0.2 * std::min(yaw, 2*M_PI - yaw);
                 // this is not an accurate error estimate since distance and yaw angle are scaled differently
                 // However it works for finding a good solution.
-                // Example of sufficient error cost: distance<=0.05, yaw<=0.05 => error<=0.1
-                return std::sqrt((pow(distance,2) + pow(yaw, 2)) );
+                // Example of sufficient error cost: distance<=0.01, yaw<=0.05 => error<=0.1
+		// for about equal weighting we calculate 0.1*yaw
+                return std::sqrt((pow(distance,2) + pow(yaw_diff, 2)) );
             }
 
 
