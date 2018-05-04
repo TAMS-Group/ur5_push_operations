@@ -737,10 +737,12 @@ namespace tams_ur5_push_execution
                     service_busy_ = true;
                     int success_count = 0;
                     int failed_in_a_row = 0;
+                    if(goal.object_id.empty()) {
+                        goal.object_id = push_execution_->getCurrentObjectID();
+                    }
 
                     // check if goal is reached!
-                    while (getGoalTargetError(goal) > 0.1) {
-                        feedback.id = id_count_;
+                    while (true) {
 
                         // preempt goal if canceled
                         if(move_object_server_.isPreemptRequested()) {
@@ -748,26 +750,40 @@ namespace tams_ur5_push_execution
                             preempted = true;
                             break;
                         }
+                        // did we fail too much?
+                        if(failed_in_a_row == 10) {
+                            ROS_ERROR("Pusher goal action aborted after 10 failed attempts in a row!");
+                            success = false;
+                            break;
+                        }
+
+                        // have we reached our goal?
+                        double error = getGoalTargetError(goal);
+                        ROS_ERROR_STREAM("Error: " << error);
+                        if(error < 0.1)
+                            break;
+
 
                         // perform new attempt and publish feedback
+                        feedback.id = id_count_;
                         result.attempts++;
                         id_count_++;
 
                         Push push;
                         if(!getNextPush(goal, push)) {
                             ROS_ERROR("Could not sample push for some reason!");
+                            failed_in_a_row++;
                             continue;
                         }
                         if(push_execution_->performPush(pusher_, push, feedback, execute_)) {
                             move_object_server_.publishFeedback(feedback);
                             success_count++;
                             failed_in_a_row = 0;
-                        } else if(failed_in_a_row++ == 10) {
-                            ROS_ERROR("Pusher goal action aborted after 10 failed attempts in a row!");
-                            success = false;
-                            break;
+                        } else {
+                            failed_in_a_row++;
                         }
                     }
+                    ROS_INFO_STREAM("Moved object to target successfully!");
                 } else {
                     // abort since service is not available
                     success = false;
@@ -803,18 +819,17 @@ namespace tams_ur5_push_execution
                 tf::Quaternion q_tar;
                 tf::quaternionMsgToTF(object_pose.orientation, q_obj);
                 tf::quaternionMsgToTF(target.orientation, q_tar);
-                tf::Quaternion q_diff = q_obj - q_tar;
-                double yaw = abs(tf::getYaw(q_diff));
+                double yaw = tf::getYaw(q_obj.inverse() * q_tar);
                 // this is not an accurate error estimate since distance and yaw angle are scaled differently
                 // However it works for finding a good solution.
                 // Example of sufficient error cost: distance<=0.05, yaw<=0.05 => error<=0.1
-                return sqrt(pow(distance, 2) + pow(yaw, 2));
+                return std::sqrt((pow(distance,2) + pow(yaw, 2)) );
             }
 
 
             /*
-            * Calls the push sampler service to query a new push
-            */
+             * Calls the push sampler service to query a new push
+             */
             bool getNextPush(MoveObjectGoal& goal, Push& push) {
                 SamplePredictivePush srv;
                 srv.request.object_id = goal.object_id;
