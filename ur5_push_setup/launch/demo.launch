@@ -13,5 +13,6 @@
 
 	<node pkg="tams_ur5_push_execution" type="push_execution" name="push_execution_service">
 		<param name="take_snapshots" value="false"/>
+		<param name="execute" value="true"/>
 	</node>
 </launch>
