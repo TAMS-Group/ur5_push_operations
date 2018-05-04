@@ -13,6 +13,11 @@ def get_diff_pose(p1, p2):
     t3 = np.dot(np.linalg.inv(t1), t2)
     return matrix_to_pose(t3)
 
+def transform_pose(base, pose):
+    tb = pose_to_matrix(base)
+    tp = pose_to_matrix(pose)
+    return matrix_to_pose(np.dot(tb, tp))
+
 def get_diff_pose_old(p1, p2):
     pose = Pose()
     pose.position.x = p2.position.x - p1.position.x

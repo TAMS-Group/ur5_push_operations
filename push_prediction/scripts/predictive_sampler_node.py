@@ -16,8 +16,10 @@ global push_predictor
 def get_pos_cost(pose, target):
     diff_pose = ch.get_diff_pose(pose, target)
     distance = math.sqrt(diff_pose.position.x**2 + diff_pose.position.y**2)
-    yaw = ch.get_yaw(diff_pose)
-    return math.sqrt(distance**2 + yaw**2)
+    yaw = ch.get_yaw(diff_pose) % (2*math.pi)
+    # target should be 0.01 distance and 0.1 yaw - therefore we take 0.01*yaw for equal weighting
+    yaw_diff = 0.2 * min(yaw, 2*math.pi - yaw)
+    return math.sqrt(distance**2 + yaw_diff**2)
 
 
 def get_random_push():
@@ -72,11 +74,11 @@ def sample_push(start_pose, target_pose):
     # try to sample 10 solutions within 1000 attempts
     solutions = []
     attempts = 0
-    while( len(solutions) < 10 and attempts < 1000):
+    while( len(solutions) < 1000 and attempts < 10000):
 
         # sample push and predict pose and cost
         push = get_random_push()
-        pose = push_predictor.predict_pose(push)
+        pose = push_predictor.predict_next_pose(push, start_pose)
         cost = get_pos_cost(pose, target_pose)
     
         # if cost is better then current, add to solutions
@@ -86,7 +88,12 @@ def sample_push(start_pose, target_pose):
 
     # sort by cost and return best solution or None if empty
     solutions = sorted(solutions, key=lambda sol: sol[0])
-    print solutions[0][0], solutions[0][1].approach 
+    if(len(solutions) > 0):
+        print start_pose
+        print solutions[0][2]
+        #print solutions[0][0], solutions[0][1].approach 
+    else:
+        print "Could not find any solutions!"
     return solutions[0][1] if len(solutions) > 0 else None
 
 

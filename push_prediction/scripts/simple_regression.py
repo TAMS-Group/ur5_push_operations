@@ -149,6 +149,10 @@ class PushPredictor(object):
         self.yaw_model = yaw_model
         print "Predictor ready!"
 
+    def predict_next_pose(self, push, start_pose):
+        prediction = self.predict_pose(push)
+        return transform_pose(start_pose, prediction)
+
     def predict_pose(self, push):
         push_vec = normalize_push(push)
         x = self.x_model.predict([push_vec])[0]
