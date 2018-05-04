@@ -397,8 +397,9 @@ class PushBringup
         bool pushObjectBack()
         {
             geometry_msgs::Pose target;
-            target.orientation.w = 1.0;
-            target.position.x = 0.2;
+	    // rotated around 180° have something in demo mode
+            target.orientation.w = 0.0;
+            target.orientation.z = 1.0;
             return pec_.moveObjectToPose(target);
         }
 
