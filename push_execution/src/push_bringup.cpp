@@ -29,6 +29,8 @@
 #include <tams_ur5_push_execution/PerformRandomPush.h>
 #include <tams_ur5_push_execution/PusherMovement.h>
 #include <tams_ur5_push_execution/ExplorePushesAction.h>
+#include <tams_ur5_push_execution/MoveObjectAction.h>
+
 
 std::string COMMAND_MAINTENANCE = "maintenance";
 std::string COMMAND_GRIPPER_OPEN = "open";
@@ -38,6 +40,7 @@ std::string COMMAND_PUSHER_DETACH = "detach";
 std::string COMMAND_DEMO = "demo";
 std::string COMMAND_PUSH = "push";
 std::string COMMAND_PUSH_NONSTOP = "push nonstop";
+std::string COMMAND_PUSH_BACK = "push back";
 std::string COMMAND_POINT = "point";
 std::string COMMAND_SET = "set";
 std::string COMMAND_UNSET = "unset";
@@ -53,7 +56,8 @@ class PushExecutionClient {
     public:
         ros::NodeHandle nh_;
 
-        actionlib::SimpleActionClient<tams_ur5_push_execution::ExplorePushesAction> ac_;
+        actionlib::SimpleActionClient<tams_ur5_push_execution::ExplorePushesAction> explorer_;
+        actionlib::SimpleActionClient<tams_ur5_push_execution::MoveObjectAction> mover_;
 
         const std::string FN_PUSHES = "pushes";
         const std::string FN_PRE_POSES = "pre_poses";
@@ -62,37 +66,50 @@ class PushExecutionClient {
         bool dump_feedback_;
         std::string dump_dir_;
 
-        PushExecutionClient(const std::string& action_name, const std::string& dump_dir) : ac_(action_name), dump_dir_(dump_dir)
+        PushExecutionClient(const std::string& dump_dir) : explorer_("explore_pushes_action"), mover_("move_object_action"), dump_dir_(dump_dir)
     {
         dump_feedback_ = true;
         if(dump_feedback_) {
             //TODO: check if file exists
-            tams_ur5_push_execution::ExplorePushesFeedback feedback;
-            write_csv_header(FN_PRE_POSES, feedback.pre_push);
-            write_csv_header(FN_PUSHES, feedback.push);
-            write_csv_header(FN_POST_POSES, feedback.post_push);
+            write_csv_header_pose(FN_PRE_POSES);
+            write_csv_header_push(FN_PUSHES);
+            write_csv_header_pose(FN_POST_POSES);
         }
     }
 
         bool performRandomPushAction(int samples=0)
         {
-            ac_.waitForServer();
-
+            explorer_.waitForServer();
             tams_ur5_push_execution::ExplorePushesGoal goal;
             goal.samples = samples;
-            ac_.sendGoal(goal, &doneCb, &activeCb, boost::bind(&PushExecutionClient::feedbackCb, this, _1));
+            explorer_.sendGoal(goal, &exploreDoneCb, &activeCb, boost::bind(&PushExecutionClient::exploreFeedbackCb, this, _1));
             return true;
         }
 
-        void abortRandomPushAction()
+        bool moveObjectToPose(const geometry_msgs::Pose& target)
         {
-            //ac_.cancelGoal();
-            ac_.cancelAllGoals();
+            mover_.waitForServer();
+            tams_ur5_push_execution::MoveObjectGoal goal;
+            goal.target = target;
+            mover_.sendGoal(goal, &moveDoneCb, &activeCb, boost::bind(&PushExecutionClient::moveFeedbackCb, this, _1));
+            return true;
+        }
+
+        void abortActions()
+        {
+            //explorer_.cancelGoal();
+            explorer_.cancelAllGoals();
+            mover_.cancelAllGoals();
         }
 
     private:
-        static void doneCb(const actionlib::SimpleClientGoalState& state, 
+        static void exploreDoneCb(const actionlib::SimpleClientGoalState& state,
                 const tams_ur5_push_execution::ExplorePushesResultConstPtr& result)
+        {
+        }
+
+        static void moveDoneCb(const actionlib::SimpleClientGoalState& state,
+                const tams_ur5_push_execution::MoveObjectResultConstPtr& result)
         {
         }
 
@@ -100,17 +117,27 @@ class PushExecutionClient {
         {
         }
 
-        void feedbackCb(const tams_ur5_push_execution::ExplorePushesFeedbackConstPtr& feedback)
+        void exploreFeedbackCb(const tams_ur5_push_execution::ExplorePushesFeedbackConstPtr& fb)
         {
             if(dump_feedback_) {
-                int id = feedback->id;
-                write_csv_line(FN_PRE_POSES, id, feedback->pre_push);
-                write_csv_line(FN_PUSHES, id, feedback->push);
-                write_csv_line(FN_POST_POSES, id, feedback->post_push);
+                dumpFeedback(fb->id, fb->pre_push, fb->post_push, fb->push);
             }
         }
 
-        void write_csv_header(const std::string& file_name, const geometry_msgs::Pose& pose)
+        void moveFeedbackCb(const tams_ur5_push_execution::MoveObjectFeedbackConstPtr& fb)
+        {
+            if(dump_feedback_) {
+                dumpFeedback(fb->id, fb->pre_push, fb->post_push, fb->push);
+            }
+        }
+
+        void dumpFeedback(int id, const geometry_msgs::Pose& pre_push, const geometry_msgs::Pose& post_push, const tams_ur5_push_execution::Push& push) {
+                write_csv_line(FN_PRE_POSES, id, pre_push);
+                write_csv_line(FN_PUSHES, id, push);
+                write_csv_line(FN_POST_POSES, id, post_push);
+        }
+
+        void write_csv_header_pose(const std::string& file_name)
         {
             std::ofstream file(dump_dir_ + "/" + file_name + ".csv");
             file << "id,";
@@ -138,7 +165,7 @@ class PushExecutionClient {
             file.close();
         }
 
-        void write_csv_header(const std::string& file_name, const tams_ur5_push_execution::Push& push)
+        void write_csv_header_push(const std::string& file_name)
         {
             std::ofstream file(dump_dir_ + "/" + file_name + ".csv");
             file << "id,";
@@ -201,7 +228,7 @@ class PushBringup
 
     public:
 
-        PushBringup(const std::string& push_result_dir) : arm_("arm"), gripper_("gripper"), pec_("explore_pushes_action", push_result_dir){
+        PushBringup(const std::string& push_result_dir) : arm_("arm"), gripper_("gripper"), pec_(push_result_dir){
 
             ros::NodeHandle nh;
             pusher_movements_ = nh.serviceClient<tams_ur5_push_execution::PusherMovement>("point_at_box");
@@ -367,9 +394,17 @@ class PushBringup
             return pec_.performRandomPushAction(samples);
         }
 
-        void abortRandomPushAction()
+        bool pushObjectBack()
         {
-            pec_.abortRandomPushAction();
+            geometry_msgs::Pose target;
+            target.orientation.w = 1.0;
+            target.position.x = 0.2;
+            return pec_.moveObjectToPose(target);
+        }
+
+        void abortAction()
+        {
+            pec_.abortActions();
         }
 };
 
@@ -386,6 +421,7 @@ void printHelp() {
     std::cout << COMMAND_DEMO << " - run demo" << std::endl;
     std::cout << COMMAND_PUSH << " - perform single push movement" << std::endl;
     std::cout << COMMAND_PUSH_NONSTOP << " - perform nonstop push movements" << std::endl;
+    std::cout << COMMAND_PUSH_BACK << " - move object back to table center" << std::endl;
     std::cout << COMMAND_HELP << " - show help screen" << std::endl;
     std::cout << COMMAND_QUIT << " - quit program" << std::endl;
 }
@@ -446,21 +482,21 @@ int main(int argc, char** argv) {
             if(pb.performRandomPushAction(0)) {
                 std::cout << "To terminate this operation, press <Enter>" << std::endl;
                 std::getline(std::cin, input);
-                pb.abortRandomPushAction();
+                pb.abortAction();
                 std::cout << "Push Action terminated by user!" << std::endl;
             } else {
                 std::cout << "Server failed to perform push action!" << std::endl;
             }
-            /*
-               if(pb.performRandomPushNonstop(false)) {
-               std::cout << "To terminate this operation, press <Enter>" << std::endl;
-               std::getline(std::cin, input);
-               pb.performRandomPushNonstop(true);
-               std::cout << "Nonstop push operations terminated by user!" << std::endl;
-               } else {
-               std::cout << "Service failed to perform nonstop push operations!" << std::endl;
-               }
-               */
+        } else if (input == COMMAND_PUSH_BACK){
+            std::cout << "Trying to push object back to the table center!" << std::endl;
+            if(pb.pushObjectBack()) {
+                std::cout << "To terminate this operation, press <Enter>" << std::endl;
+                std::getline(std::cin, input);
+                pb.abortAction();
+                std::cout << "Push Action terminated by user!" << std::endl;
+            } else {
+                std::cout << "Server failed to perform push action!" << std::endl;
+            }
         } else if (input == COMMAND_POINT){
             std::cout << "Point at pushable object." << std::endl;
             pb.pointAtBox();
