@@ -514,10 +514,10 @@ namespace tams_ur5_push_execution
                 tf::poseEigenToMsg(approach_affine * wp, retreat_high_wp);
                 retreat_high_wp.orientation = orientation;
 
-		std::vector<geometry_msgs::Pose> start_wps = {start_wp};
-		std::vector<geometry_msgs::Pose> approach_wps = {approach_wp};
-		std::vector<geometry_msgs::Pose> push_wps = {push_wp};
-		std::vector<geometry_msgs::Pose> retreat_wps = {retreat_low_wp, retreat_high_wp};
+                std::vector<geometry_msgs::Pose> start_wps = {start_wp};
+                std::vector<geometry_msgs::Pose> approach_wps = {approach_wp};
+                std::vector<geometry_msgs::Pose> push_wps = {push_wp};
+                std::vector<geometry_msgs::Pose> retreat_wps = {retreat_low_wp, retreat_high_wp};
 
                 waypoints = {start_wps, approach_wps, push_wps, retreat_wps};
 
