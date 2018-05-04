@@ -532,8 +532,8 @@ namespace tams_ur5_push_execution
                 if(waypoints.size() == 4 && distances.size() == 3) {
                     pusher.setPoseReferenceFrame("table_top");
 
-                    robot_state::RobotStatePtr next_state = pusher.getCurrentState();
-                    const moveit::core::JointModelGroup* jmg = next_state->getJointModelGroup(pusher.getName());
+                    robot_state::RobotStatePtr next_state = std::make_shared<robot_state::RobotState>(start_state);
+                    const moveit::core::JointModelGroup* jmg = start_state.getJointModelGroup(pusher.getName());
 
                     pusher.setStartState(start_state);
                     std::vector<geometry_msgs::Pose> wp_target;
@@ -599,7 +599,6 @@ namespace tams_ur5_push_execution
                 } else {
                     ROS_ERROR_STREAM("Failed to plan push trajectory. Number of waypoints or distances is invalid!");
                 }
-                pusher.setStartStateToCurrentState();
                 return success;
             }
 
