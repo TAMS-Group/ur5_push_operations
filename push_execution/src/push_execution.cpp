@@ -337,6 +337,10 @@ namespace tams_ur5_push_execution
                 return obj_pose_affine;
             }
 
+            std::string getCurrentObjectID() {
+                return marker_.header.frame_id;
+            }
+
         private:
 
             bool isObjectClear() {
