@@ -38,8 +38,8 @@ def sample_random_pose_from_box(x, y, z):
     elif (p <= (x + y)):
         pose.position.x = x
         pose.position.y = p - x
-        pose.orientation = ch.quat_from_yaw( math.pi)
-    elif (p <= (2 * x * y)):
+        pose.orientation = ch.quat_from_yaw(math.pi)
+    elif (p <= (2 * x + y)):
         pose.position.x = 2 * x + y - p
         pose.position.y = y
         pose.orientation = ch.quat_from_yaw(1.5* math.pi)
@@ -86,7 +86,7 @@ def sample_push(start_pose, target_pose):
 
     # sort by cost and return best solution or None if empty
     solutions = sorted(solutions, key=lambda sol: sol[0])
-    print solutions[0]
+    print solutions[0][0], solutions[0][1].approach 
     return solutions[0][1] if len(solutions) > 0 else None
 
 
