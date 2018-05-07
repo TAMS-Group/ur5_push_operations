@@ -119,7 +119,7 @@ namespace ur5_pusher
 		    ROS_INFO("Pusher successfully loaded from attached collision object!");
 		    return true;
         }
-        ROS_ERROR("Unable to load pusher since the number of attached collion objects is not 1!");
+        ROS_WARN("Unable to load pusher since the number of attached collion objects is not 1!");
         return false;
     }
 
