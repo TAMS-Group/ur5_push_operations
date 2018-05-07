@@ -7,9 +7,8 @@
 #include <chrono>
 #include <ctime> 
 
-//#include <ncurses.h>
-
 #include <ros/ros.h>
+#include <tf/transform_listener.h>
 
 #include <moveit/robot_state/conversions.h>
 #include <moveit/move_group_interface/move_group_interface.h>
@@ -41,6 +40,8 @@ std::string COMMAND_DEMO = "demo";
 std::string COMMAND_PUSH = "push";
 std::string COMMAND_PUSH_NONSTOP = "push nonstop";
 std::string COMMAND_PUSH_BACK = "push back";
+std::string COMMAND_PUSH_TARGET = "push target";
+std::string COMMAND_SAVE_TARGET = "save target";
 std::string COMMAND_POINT = "point";
 std::string COMMAND_SET = "set";
 std::string COMMAND_UNSET = "unset";
@@ -58,6 +59,7 @@ class PushExecutionClient {
 
         actionlib::SimpleActionClient<tams_ur5_push_execution::ExplorePushesAction> explorer_;
         actionlib::SimpleActionClient<tams_ur5_push_execution::MoveObjectAction> mover_;
+
 
         const std::string FN_PUSHES = "pushes";
         const std::string FN_PRE_POSES = "pre_poses";
@@ -225,6 +227,9 @@ class PushBringup
         bool execute_push_operations_ = false;
         PushExecutionClient pec_;
         ros::ServiceClient pusher_movements_;
+        
+        tf::TransformListener tf_listener_;
+        geometry_msgs::PoseStamped push_target_;
 
     public:
 
@@ -233,6 +238,9 @@ class PushBringup
             ros::NodeHandle nh;
             pusher_movements_ = nh.serviceClient<tams_ur5_push_execution::PusherMovement>("point_at_box");
             createMaintenanceState();
+
+            push_target_.header.frame_id="table_top";
+            push_target_.pose.orientation.w = 1.0;
 
             geometry_msgs::Pose pose;
             pose.position.x = 0.2 - 0.0305;
@@ -407,6 +415,26 @@ class PushBringup
         {
             pec_.abortActions();
         }
+
+        bool savePushTarget()
+        {
+            geometry_msgs::PoseStamped pose;
+            pose.header.frame_id="pushable_object_0";
+            pose.pose.orientation.w = 1.0;
+            try{
+                tf_listener_.transformPose("table_top", pose, push_target_);
+            }
+            catch (tf::TransformException ex){
+                ROS_ERROR("%s",ex.what());
+                return false;
+            }
+            return true;
+        }
+
+        bool pushToTarget() 
+        {
+            return pec_.moveObjectToPose(push_target_.pose);
+        }
 };
 
 
@@ -423,6 +451,8 @@ void printHelp() {
     std::cout << COMMAND_PUSH << " - perform single push movement" << std::endl;
     std::cout << COMMAND_PUSH_NONSTOP << " - perform nonstop push movements" << std::endl;
     std::cout << COMMAND_PUSH_BACK << " - move object back to table center" << std::endl;
+    std::cout << COMMAND_SAVE_TARGET << " - save current object position as push target" << std::endl;
+    std::cout << COMMAND_PUSH_TARGET << " - push object to push target" << std::endl;
     std::cout << COMMAND_HELP << " - show help screen" << std::endl;
     std::cout << COMMAND_QUIT << " - quit program" << std::endl;
 }
@@ -498,6 +528,15 @@ int main(int argc, char** argv) {
             } else {
                 std::cout << "Server failed to perform push action!" << std::endl;
             }
+        } else if (input == COMMAND_SAVE_TARGET){
+            if(pb.savePushTarget()) {
+                std::cout << "Goal target saved. Push Object there with '" << COMMAND_PUSH_TARGET << std::endl;
+            } else {
+                std::cout << "Failed to save push target due to unknown transform." << std::endl;
+            }
+        } else if (input == COMMAND_PUSH_TARGET){
+            std::cout << "Attempt to push object to target." << std::endl;
+            pb.pushToTarget();
         } else if (input == COMMAND_POINT){
             std::cout << "Point at pushable object." << std::endl;
             pb.pointAtBox();
