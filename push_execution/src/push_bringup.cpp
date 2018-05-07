@@ -530,13 +530,20 @@ int main(int argc, char** argv) {
             }
         } else if (input == COMMAND_SAVE_TARGET){
             if(pb.savePushTarget()) {
-                std::cout << "Goal target saved. Push Object there with '" << COMMAND_PUSH_TARGET << std::endl;
+                std::cout << "Goal target saved. Push Object there with '" << COMMAND_PUSH_TARGET << "'" << std::endl;
             } else {
                 std::cout << "Failed to save push target due to unknown transform." << std::endl;
             }
         } else if (input == COMMAND_PUSH_TARGET){
             std::cout << "Attempt to push object to target." << std::endl;
-            pb.pushToTarget();
+            if(pb.pushToTarget()) {
+                std::cout << "To terminate this operation, press <Enter>" << std::endl;
+                std::getline(std::cin, input);
+                pb.abortAction();
+                std::cout << "Push Action terminated by user!" << std::endl;
+            } else {
+                std::cout << "Server failed to perform push action!" << std::endl;
+            }
         } else if (input == COMMAND_POINT){
             std::cout << "Point at pushable object." << std::endl;
             pb.pointAtBox();
