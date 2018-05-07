@@ -8,7 +8,7 @@ from lib import content_helper as ch
 import math
 import numpy as np
 
-from simple_regression import PushPredictor
+from push_predictor import PushPredictor
 
 global push_predictor
 prediction=None
@@ -102,7 +102,8 @@ def sample_predictive_push(req):
     if prediction is not None:
         pr_cost, pr_push, pr_pose = prediction
         pose = req.object_pose
-        cost = get_pos_cost(req.object_pose, req.target)
+        cost = get_pos_cost(pose, req.target)
+        dt = ch.get_diff_pose(pose, req.target)
 
         dp = ch.get_diff_pose(pr_pose, pose)
 
@@ -111,6 +112,8 @@ def sample_predictive_push(req):
         print "result:          ", cost, pose.position.x, pose.position.y, ch.get_yaw(pose)
         print
         print "prediction error:", abs(pr_cost - cost), dp.position.x, dp.position.y, ch.get_yaw(dp)
+        print
+        print "target error:                    ", dt.position.x, dt.position.y, ch.get_yaw(dt)
         print
 
 
