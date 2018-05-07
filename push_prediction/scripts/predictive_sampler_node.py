@@ -10,8 +10,8 @@ import numpy as np
 
 from simple_regression import PushPredictor
 
-
 global push_predictor
+prediction=None
 
 def get_pos_cost(pose, target):
     diff_pose = ch.get_diff_pose(pose, target)
@@ -89,23 +89,35 @@ def sample_push(start_pose, target_pose):
 
     # sort by cost and return best solution or None if empty
     solutions = sorted(solutions, key=lambda sol: sol[0])
-    if(len(solutions) > 0):
-        print start_pose
-        print solutions[0][2]
-        #print solutions[0][0], solutions[0][1].approach 
-    else:
+    if(len(solutions) == 0):
         print "Could not find any solutions!"
-    return solutions[0][1] if len(solutions) > 0 else None
+    return solutions[0] if len(solutions) > 0 else None
 
 
 def sample_predictive_push(req):
-    print "Recieve sample request"
+    global prediction
     res = SamplePredictivePushResponse()
     res.success = False
 
+    if prediction is not None:
+        pr_cost, pr_push, pr_pose = prediction
+        pose = req.object_pose
+        cost = get_pos_cost(req.object_pose, req.target)
+
+        dp = ch.get_diff_pose(pr_pose, pose)
+
+        print "----------------- cost           ", "x               ", "y               ", "yaw"
+        print "prediction:      ", pr_cost, pr_pose.position.x, pr_pose.position.y, ch.get_yaw(pr_pose)
+        print "result:          ", cost, pose.position.x, pose.position.y, ch.get_yaw(pose)
+        print
+        print "prediction error:", abs(pr_cost - cost), dp.position.x, dp.position.y, ch.get_yaw(dp)
+        print
+
+
     # try to sample push
-    push = sample_push(req.object_pose, req.target)
-    if push is not None:
+    prediction = sample_push(req.object_pose, req.target)
+    if prediction is not None:
+        cost, push, pose = prediction
         #fill push
         res.push.mode = 0
         res.push.distance = push.distance
@@ -116,6 +128,7 @@ def sample_predictive_push(req):
         res.push.approach.angle = push.angle
         #set successful
         res.success = True
+
 
     return res
 	
