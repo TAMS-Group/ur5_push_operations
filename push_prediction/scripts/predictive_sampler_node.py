@@ -33,21 +33,22 @@ def get_random_push():
 def sample_random_pose_from_box(x, y, z):
     pose = Pose()
     p = np.random.uniform(0.0, 2 * (x + y))
+    edge_distance = 0.005
     if(p <= x):
-        pose.position.x = p
+        pose.position.x = min(max(edge_distance, p), x-edge_distance)
         pose.position.y = 0
         pose.orientation = ch.quat_from_yaw(0.5* math.pi)
     elif (p <= (x + y)):
         pose.position.x = x
-        pose.position.y = p - x
+        pose.position.y = min(max(edge_distance, p-x ), y-edge_distance)
         pose.orientation = ch.quat_from_yaw(math.pi)
     elif (p <= (2 * x + y)):
-        pose.position.x = 2 * x + y - p
+        pose.position.x = min(max(edge_distance, 2 * x + y - p ), x-edge_distance)
         pose.position.y = y
         pose.orientation = ch.quat_from_yaw(1.5* math.pi)
     else:
         pose.position.x = 0
-        pose.position.y = 2 * (x + y) - p
+        pose.position.y = min(max(edge_distance, 2 * (x + y) - p ), y-edge_distance)
         pose.orientation = ch.quat_from_yaw(0.0)
 
     # adjust to center
