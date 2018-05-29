@@ -44,12 +44,15 @@ class PushApproachSampler
 		geometry_msgs::Pose sampleRandomPoseFromBox(double dim_x, double dim_y, double dim_z);
 
 		double sampleRandomPushAngle(double range=0.5);
+		double sampleRandomPushDistance(double min=0.005, double max=0.03);
 
 	public:
 		PushApproachSampler();
 		void setMarker(const visualization_msgs::Marker& marker);
 		void setReferenceFrame(const std::string& reference_frame);
 
+		bool sampleRandomPush(tams_ur5_push_execution::Push& push);
 		bool sampleRandomPushApproach(tams_ur5_push_execution::PushApproach& approach);
+
 };
 }

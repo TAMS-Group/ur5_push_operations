@@ -386,9 +386,8 @@ namespace tams_ur5_push_execution
                 push.mode = Push::LINEAR;
                 push_sampler_.setMarker(marker_);
 
-                if(push_sampler_.sampleRandomPushApproach(push.approach))
+                if(push_sampler_.sampleRandomPush(push))
                 {
-                    push.distance = 0.03;
                     visualizePushApproach(push.approach);
                     return true;
                 }

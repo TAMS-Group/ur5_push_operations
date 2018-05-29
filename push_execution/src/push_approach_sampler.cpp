@@ -23,6 +23,12 @@ namespace ur5_pusher
 		reference_frame_ = reference_frame;
 	}
 
+	bool PushApproachSampler::sampleRandomPush(tams_ur5_push_execution::Push& push)
+	{
+		push.distance = sampleRandomPushDistance();
+		ROS_ERROR_STREAM("Sampled push distance: " << push.distance);
+		return sampleRandomPushApproach(push.approach);
+	}
 
 	bool PushApproachSampler::sampleRandomPushApproach(tams_ur5_push_execution::PushApproach& approach)
 	{
@@ -134,5 +140,9 @@ namespace ur5_pusher
 
 	double PushApproachSampler::sampleRandomPushAngle(double range) {
 		return 2 * range * unif_dist_(gen) - range;
+	}
+
+	double PushApproachSampler::sampleRandomPushDistance(double min, double max) {
+		return min + unif_dist_(gen) * (max - min);
 	}
 }
