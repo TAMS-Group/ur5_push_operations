@@ -12,6 +12,7 @@ from lib import load_samples
 from lib.content_helper import *
 
 import glob
+import os
 
 from math import *
 
@@ -128,10 +129,12 @@ def initialize_models():
 class PushPredictor(object):
 
     def __init__(self):
-        x_model_file = 'x_model.pkl'
-        y_model_file = 'y_model.pkl'
-        yaw_model_file = 'yaw_model.pkl'
-        dump_files = glob.glob('*.pkl')
+        filepath = os.path.dirname(os.path.realpath(__file__))
+        x_model_file = filepath+'/x_model.pkl'
+        y_model_file = filepath+'/y_model.pkl'
+        yaw_model_file = filepath+'/yaw_model.pkl'
+        print filepath
+        dump_files = glob.glob(filepath+'/*.pkl')
         if all(f in dump_files for f in [x_model_file, y_model_file, yaw_model_file]):
             print "Model dumps found - loading x/y/yaw models"
             x_model = joblib.load(x_model_file)
