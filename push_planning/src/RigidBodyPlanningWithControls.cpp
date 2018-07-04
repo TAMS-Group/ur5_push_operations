@@ -49,18 +49,22 @@
 #include <ompl/config.h>
 #include <iostream>
 
-// ROS dependencies
 #include <eigen3/Eigen/Geometry>
 #include <eigen3/Eigen/Core>
 #include <eigen3/Eigen/Dense>
 
+// ROS dependencies
+
 #include <ros/ros.h>
+#include <tf/tf.h>
+#include <actionlib/server/simple_action_server.h>
 #include <eigen_conversions/eigen_msg.h>
 #include <tams_ur5_push_execution/PredictPush.h>
 #include <tams_ur5_push_execution/PushTrajectory.h>
 #include <graph_msgs/GeometryGraph.h>
 #include <geometry_msgs/Pose.h>
 #include <geometry_msgs/Quaternion.h>
+#include <push_planning/PushPlanAction.h>
 
 namespace ob = ompl::base;
 namespace oc = ompl::control;
@@ -87,8 +91,12 @@ bool isStateValid(const oc::SpaceInformation *si, const ob::State *state)
     return si->satisfiesBounds(state) && (const void*)rot != (const void*)pos;
 }
 
-void propagate(const ob::State *start, const oc::Control *control, const double duration, ob::State *result)
-{
+
+bool propagateWithPredictor(const ros::ServiceClient& predictor_,
+        const ob::State *start, const oc::Control *control, const double duration, ob::State *result) {
+
+    bool success = true;
+
     const auto *se2state = start->as<ob::SE2StateSpace::StateType>();
     const double* pos = se2state->as<ob::RealVectorStateSpace::StateType>(0)->values;
     const double yaw = se2state->as<ob::SO2StateSpace::StateType>(1)->value;
@@ -104,85 +112,128 @@ void propagate(const ob::State *start, const oc::Control *control, const double 
 
     if(msg.response.success) {
 
-	    geometry_msgs::Pose np = msg.response.next_pose;
-	    geometry_msgs::Quaternion q = np.orientation;
-	    Eigen::Quaterniond next_q(q.w, q.x, q.y, q.z);
-	    double next_yaw = next_q.toRotationMatrix().eulerAngles(0,1,2)[2];
+        geometry_msgs::Pose np = msg.response.next_pose;
+        geometry_msgs::Quaternion q = np.orientation;
+        Eigen::Quaterniond next_q(q.w, q.x, q.y, q.z);
+        double next_yaw = next_q.toRotationMatrix().eulerAngles(0,1,2)[2];
 
-	    // create new state
-	    Eigen::Affine2d next_pos = Eigen::Translation2d(pos[0], pos[1]) 
+        // create new state
+        Eigen::Affine2d next_pos = Eigen::Translation2d(pos[0], pos[1]) 
             * Eigen::Rotation2Dd(yaw) * Eigen::Translation2d(np.position.x, np.position.y);
 
-	    //next_pos.translate(Eigen::Translation2d(pos[0], pos[1]));
-	    //next_pos.rotate(Eigen::Rotation2d(yaw));
-	    //next_pos.translate(Eigen::Translation2d(np.position.x, np.position.y));
-	    //next_pos.rotate(Eigen::Rotation2d(next_yaw));
+        // set result state
+        result->as<ob::SE2StateSpace::StateType>()->setXY(
+                next_pos.translation().x(),
+                next_pos.translation().y());
+        result->as<ob::SE2StateSpace::StateType>()->setYaw( yaw + next_yaw );
 
-	    // set result state
-	    result->as<ob::SE2StateSpace::StateType>()->setXY(
-			    next_pos.translation().x(),
-			    next_pos.translation().y());
-	    result->as<ob::SE2StateSpace::StateType>()->setYaw( yaw + next_yaw );
     } else {
-	    ROS_ERROR_STREAM("Predict Push service call failed!");
-	    result->as<ob::SE2StateSpace::StateType>()->setXY(pos[0], pos[1]);
-	    result->as<ob::SE2StateSpace::StateType>()->setYaw(yaw);
+        ROS_ERROR_STREAM("Predict Push service call failed!");
+        result->as<ob::SE2StateSpace::StateType>()->setXY(pos[0], pos[1]);
+        result->as<ob::SE2StateSpace::StateType>()->setYaw(yaw);
+        success = false;
+    }
+    return success;
+}
+
+void propagate(const ob::State *start, const oc::Control *control, const double duration, ob::State *result)
+{
+    propagateWithPredictor(prediction_client_, start, control, duration, result);
+    //const auto *se2state = start->as<ob::SE2StateSpace::StateType>();
+    //const double* pos = se2state->as<ob::RealVectorStateSpace::StateType>(0)->values;
+    //const double yaw = se2state->as<ob::SO2StateSpace::StateType>(1)->value;
+    //const double* ctrl = control->as<oc::RealVectorControlSpace::ControlType>()->values;
+
+    //tams_ur5_push_execution::PredictPush msg;
+    //msg.request.control.push_back(ctrl[0]);
+    //msg.request.control.push_back(ctrl[1]);
+    //msg.request.control.push_back(ctrl[2]);
+
+    //// predict push control
+    //prediction_client_.call(msg);
+
+    //if(msg.response.success) {
+
+    //    geometry_msgs::Pose np = msg.response.next_pose;
+    //    geometry_msgs::Quaternion q = np.orientation;
+    //    Eigen::Quaterniond next_q(q.w, q.x, q.y, q.z);
+    //    double next_yaw = next_q.toRotationMatrix().eulerAngles(0,1,2)[2];
+
+    //    // create new state
+    //    Eigen::Affine2d next_pos = Eigen::Translation2d(pos[0], pos[1]) 
+    //        * Eigen::Rotation2Dd(yaw) * Eigen::Translation2d(np.position.x, np.position.y);
+
+    //    // set result state
+    //    result->as<ob::SE2StateSpace::StateType>()->setXY(
+    //		    next_pos.translation().x(),
+    //		    next_pos.translation().y());
+    //    result->as<ob::SE2StateSpace::StateType>()->setYaw( yaw + next_yaw );
+    //} else {
+    //    ROS_ERROR_STREAM("Predict Push service call failed!");
+    //    result->as<ob::SE2StateSpace::StateType>()->setXY(pos[0], pos[1]);
+    //    result->as<ob::SE2StateSpace::StateType>()->setYaw(yaw);
+    //}
+}
+
+
+void pathControlToPushTrajectoryMsg(const ompl::control::PathControl& solution, tams_ur5_push_execution::PushTrajectory& traj_msg) {
+    traj_msg.steps = solution.getStateCount();
+
+    geometry_msgs::Pose pose;
+    pose.orientation.w = 1.0;
+
+    for(int i = 0; i < traj_msg.steps; i++) {
+        pose.position.x = solution.getState(i)->as<ob::SE2StateSpace::StateType>()->getX();
+        pose.position.y = solution.getState(i)->as<ob::SE2StateSpace::StateType>()->getY();
+        double yaw = solution.getState(i)->as<ob::SE2StateSpace::StateType>()->getYaw();
+        Eigen::Quaterniond q(Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ()));
+        tf::quaternionEigenToMsg(q, pose.orientation);
+        traj_msg.poses.push_back(pose);
+        //traj_msg.pushes.push_back(push);
     }
 }
 
 void publishPushTrajectory(const ompl::control::PathControl& solution)
 {
-	tams_ur5_push_execution::PushTrajectory traj_msg;
-	traj_msg.steps = solution.getStateCount();
+    tams_ur5_push_execution::PushTrajectory traj_msg;
+    pathControlToPushTrajectoryMsg(solution, traj_msg);
+    traj_pub_.publish(traj_msg);
+}
 
-	geometry_msgs::Pose pose;
-	pose.orientation.w = 1.0;
+void plannerDataToGraphMsg(const ompl::base::PlannerData& data, graph_msgs::GeometryGraph& graph_msg) {
+    graph_msg.header.frame_id = "table_top";
+    geometry_msgs::Pose pose;
+    pose.orientation.w = 1.0;
 
-	for(int i = 0; i < traj_msg.steps; i++) {
-		pose.position.x = solution.getState(i)->as<ob::SE2StateSpace::StateType>()->getX();
-		pose.position.y = solution.getState(i)->as<ob::SE2StateSpace::StateType>()->getY();
-		double yaw = solution.getState(i)->as<ob::SE2StateSpace::StateType>()->getYaw();
-		Eigen::Quaterniond q(Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ()));
-		tf::quaternionEigenToMsg(q, pose.orientation);
-		traj_msg.poses.push_back(pose);
-		//traj_msg.pushes.push_back(push);
-	}
+    for(unsigned int i = 0; i < data.numVertices(); i++) {
 
-	traj_pub_.publish(traj_msg);
+        // fill node positions
+        pose.position.x = data.getVertex(i).getState()->as<ob::SE2StateSpace::StateType>()->getX();
+        pose.position.y = data.getVertex(i).getState()->as<ob::SE2StateSpace::StateType>()->getY();
+        graph_msg.nodes.push_back(pose.position);
+
+        // copy adjacent edges
+        graph_msgs::Edges edges;
+        data.getEdges(i, edges.node_ids);
+
+        // copy edge weights
+        ompl::base::Cost cost;
+        for(unsigned int n : edges.node_ids) {
+            if(data.getEdgeWeight(i,n,&cost)) {
+                edges.weights.push_back(cost.value());
+            }
+        }
+
+        // fill edges
+        graph_msg.edges.push_back(edges);
+    }
 }
 
 void publishPlannerData(const ompl::base::PlannerData& data) {
-	graph_msgs::GeometryGraph graph_msg;
-	graph_msg.header.frame_id = "table_top";
-	geometry_msgs::Pose pose;
-	pose.orientation.w = 1.0;
-
-	for(unsigned int i = 0; i < data.numVertices(); i++) {
-
-		// fill node positions
-		pose.position.x = data.getVertex(i).getState()->as<ob::SE2StateSpace::StateType>()->getX();
-		pose.position.y = data.getVertex(i).getState()->as<ob::SE2StateSpace::StateType>()->getY();
-		graph_msg.nodes.push_back(pose.position);
-
-		// copy adjacent edges
-		graph_msgs::Edges edges;
-		data.getEdges(i, edges.node_ids);
-
-		// copy edge weights
-		ompl::base::Cost cost;
-		for(unsigned int n : edges.node_ids) {
-			if(data.getEdgeWeight(i,n,&cost)) {
-				edges.weights.push_back(cost.value());
-			}
-		}
-
-		// fill edges
-		graph_msg.edges.push_back(edges);
-	}
-
-	graph_pub_.publish(graph_msg);
+    graph_msgs::GeometryGraph graph_msg;
+    plannerDataToGraphMsg(data, graph_msg);
+    graph_pub_.publish(graph_msg);
 }
-
 
 void planWithPushControl()
 {
@@ -244,44 +295,163 @@ void planWithPushControl()
         // print the path to screen
 
         ss.getSolutionPath().printAsMatrix(std::cout);
-	publishPushTrajectory(ss.getSolutionPath());
+        publishPushTrajectory(ss.getSolutionPath());
 
-	ompl::base::PlannerData data(ss.getSpaceInformation());
-	ss.getPlannerData(data);
-	publishPlannerData(data);
+        ompl::base::PlannerData data(ss.getSpaceInformation());
+        ss.getPlannerData(data);
+        publishPlannerData(data);
     }
     else
         std::cout << "No solution found" << std::endl;
 }
 
 
+
+
+
+
+
+
+
+namespace push_planning {
+
+    class PushPlannerActionServer
+    {
+        private:
+            actionlib::SimpleActionServer<PushPlanAction> as_;
+            ros::ServiceClient predictor_;
+
+        public:
+            PushPlannerActionServer(ros::NodeHandle& nh, const std::string& action_name, const std::string& prediction_service_name) :
+                as_(nh, action_name, boost::bind(&PushPlannerActionServer::executeCB, this, _1), false)
+        {
+            if(ros::service::waitForService(prediction_service_name)) {
+                predictor_ = nh.serviceClient<tams_ur5_push_execution::PredictPush>(prediction_service_name);
+                as_.start();
+            }
+        }
+
+            void executeCB(const PushPlanGoalConstPtr &goal)
+            {
+                bool success = true;
+
+                PushPlanResult result;
+                if (plan(goal, result)) {
+                    as_.setSucceeded(result);
+                } else
+                    as_.setAborted(result);
+            }
+
+            void setStateToPose(ob::ScopedState<ob::SE2StateSpace>& state, const geometry_msgs::Pose& pose){
+                state->setX(pose.position.x);
+                state->setY(pose.position.y);
+                state->setY(pose.position.z);
+                state->setYaw(tf::getYaw(pose.orientation));
+            }
+
+            //void propagate(const ob::State *start, const oc::Control *control, const double duration, ob::State *result) {
+            //    propagateWithPredictor(predictor_, start, control, duration, result);
+            //}
+
+            bool plan(const PushPlanGoalConstPtr& goal, PushPlanResult& result)
+            {
+                bool success = true;
+
+                // extract goal request
+                const std::string& object_id = goal->object_id;
+                const geometry_msgs::Pose& start_pose = goal->start_pose;
+                const geometry_msgs::Pose& goal_pose = goal->goal_pose;
+
+                // construct the state space we are planning in
+                auto space(std::make_shared<ob::SE2StateSpace>());
+
+                // set the bounds for the R^2 part of SE(2)
+                ob::RealVectorBounds bounds(2);
+                bounds.setLow(-0.3);
+                bounds.setHigh(0.3);
+
+                space->setBounds(bounds);
+
+                // create a control space (obj border, yaw, distance)
+                auto cspace(std::make_shared<oc::RealVectorControlSpace>(space, 2));
+
+                // we set cbounds to (0.0,1.0) to scale push approaches (border, yaw, distance)
+                ob::RealVectorBounds cbounds(2);
+                cbounds.setLow(0.0);
+                cbounds.setHigh(1.0);
+
+                cspace->setBounds(cbounds);
+
+                // define a simple setup class
+                oc::SimpleSetup ss(cspace);
+
+                // set the state propagation routine
+                ss.setStatePropagator(propagate);
+                ss.setStatePropagator( 
+                        [&](const ob::State *start, const oc::Control *control, const double duration, ob::State *result)
+                        { propagateWithPredictor(predictor_, start, control, duration, result); } );
+
+                // set state validity checking for this space
+                ss.setStateValidityChecker(
+                        [&ss](const ob::State *state) { return isStateValid(ss.getSpaceInformation().get(), state); });
+
+                // create a start state
+                ob::ScopedState<ob::SE2StateSpace> start_state(space);
+                setStateToPose(start_state, start_pose);
+
+                // create goal state
+                ob::ScopedState<ob::SE2StateSpace> goal_state(space);
+                setStateToPose(goal_state, goal_pose);
+
+                // set the start and goal states
+                ss.setStartAndGoalStates(start_state, goal_state, 0.05);
+
+                // attempt to solve the problem within ten seconds of planning time
+                ob::PlannerStatus solved = ss.solve(10.0);
+
+                if (solved)
+                {
+                    //ss.getSolutionPath().printAsMatrix(std::cout);
+                    pathControlToPushTrajectoryMsg(ss.getSolutionPath(), result.trajectory);
+
+                    ompl::base::PlannerData data(ss.getSpaceInformation());
+                    ss.getPlannerData(data);
+                    plannerDataToGraphMsg(data, result.planner_data);
+                }
+                else {
+                    result.error_message = "No solution found";
+                    success = false;
+                }
+                return success;
+            }
+    };
+};
+
 int main(int argc, char** argv)
 {
-    std::cout << "OMPL version: " << OMPL_VERSION << std::endl;
-
     ros::init(argc, argv, "push_planner_node");
-    ros::AsyncSpinner spinner(4);
-    spinner.start();
+
     ros::NodeHandle nh;
-
-    // plan();
-    //
-    // std::cout << std::endl << std::endl;
-    //
-    //
-
-    //planWithSimpleSetup();
+    ros::NodeHandle pnh("~");
 
     std::string predict_push_service = "predict_push_service";
 
-    ROS_INFO_STREAM("Waiting for service " << predict_push_service);
-    if(ros::service::waitForService(predict_push_service)) {
-		    ROS_INFO_STREAM("Service: " << predict_push_service << "was found!");
-    	prediction_client_ = nh.serviceClient<tams_ur5_push_execution::PredictPush>(predict_push_service);
-	traj_pub_ = nh.advertise<tams_ur5_push_execution::PushTrajectory>("/push_trajectory", 0);
-	graph_pub_ = nh.advertise<graph_msgs::GeometryGraph>("/push_planner_graph", 0);
+    if (pnh.getParam("launch_action_server")) {
+        push_planning::PushPlannerActionServer planner(nh, "push_planner_action_server",  predict_push_service);
+        ros::spin();
+    } else {
 
-    	planWithPushControl();
+        ros::AsyncSpinner spinner(4);
+        spinner.start();
+
+        ROS_INFO_STREAM("Waiting for service " << predict_push_service);
+        if(ros::service::waitForService(predict_push_service)) {
+            ROS_INFO_STREAM("Service: " << predict_push_service << "was found!");
+            prediction_client_ = nh.serviceClient<tams_ur5_push_execution::PredictPush>(predict_push_service);
+            traj_pub_ = nh.advertise<tams_ur5_push_execution::PushTrajectory>("/push_trajectory", 0);
+            graph_pub_ = nh.advertise<graph_msgs::GeometryGraph>("/push_planner_graph", 0);
+            planWithPushControl();
+        }
     }
 
     return 0;

@@ -49,13 +49,26 @@
   <!-- Use doc_depend for packages you need only for building documentation: -->
   <!--   <doc_depend>doxygen</doc_depend> -->
   <buildtool_depend>catkin</buildtool_depend>
+  <build_depend>roscpp</build_depend>
   <build_depend>eigen</build_depend>
+  <build_depend>eigen_conversions</build_depend>
+  <build_depend>actionlib</build_depend>
+  <build_depend>actionlib_msgs</build_depend>
+  <build_depend>graph_msgs</build_depend>
   <build_depend>geometry_msgs</build_depend>
+  <build_depend>message_generation</build_depend>
   <build_depend>tams_ur5_push_execution</build_depend>
 
+  <exec_depend>roscpp</exec_depend>
   <exec_depend>eigen</exec_depend>
+  <exec_depend>eigen_conversions</exec_depend>
+  <exec_depend>actionlib</exec_depend>
+  <exec_depend>actionlib_msgs</exec_depend>
+  <exec_depend>graph_msgs</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>message_runtime</exec_depend>
   <exec_depend>tams_ur5_push_execution</exec_depend>
+
 
 
   <!-- The export tag contains other, unspecified, tags -->

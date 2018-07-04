@@ -1,0 +1,24 @@
+# The goal features might be put into a dedicated
+# ros message - moreso if further attributes are added
+
+# object identification to use for sampler
+string object_id
+
+# start and goal poses of the object
+geometry_msgs/Pose start_pose
+geometry_msgs/Pose goal_pose
+
+---
+
+# The planned trajectory
+tams_ur5_push_execution/PushTrajectory trajectory
+
+# The complete planning graph (might not belong into this action)
+graph_msgs/GeometryGraph planner_data
+
+# error message if action failed
+string error_message
+
+---
+
+string state

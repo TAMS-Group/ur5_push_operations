@@ -32,6 +32,7 @@ add_message_files(
 	FILES
 	PushApproach.msg
 	Push.msg
+	PushTrajectory.msg
 )
 
 add_service_files(
