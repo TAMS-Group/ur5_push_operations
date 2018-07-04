@@ -1,0 +1,4 @@
+float64[] control
+---
+geometry_msgs/Pose next_pose
+bool success
