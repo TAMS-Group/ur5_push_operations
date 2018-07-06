@@ -7,12 +7,14 @@ from std_msgs.msg import ColorRGBA
 from geometry_msgs.msg import Pose, Vector3
 from graph_msgs.msg import GeometryGraph, Edges
 
+from lib.marker_helper import init_marker, init_graph_markers
+
 dim_X = 0.162
 dim_Y = 0.23
 dim_Z = 0.112
 
 def visualize_object_trajectory(traj_msg):
-    global marker_pub
+    global marker_pub, data_pub
     markers = MarkerArray()
 
     # visualize as graph
@@ -20,7 +22,13 @@ def visualize_object_trajectory(traj_msg):
     edges = [Edges([i, i+1], [1.0, 1.0]) for i in range(len(nodes)-1)]
     edges.append(Edges())
     color = ColorRGBA(0.0,1.0,0.0,1.0)
-    visualize_graph(nodes, edges, nodes_id=2, edges_id=3, nodes_color=color, edges_color=color, linewidth=0.003, is_path=True)
+    #visualize_graph(nodes, edges, nodes_id=2, edges_id=3, nodes_color=color, edges_color=color, linewidth=0.003, is_path=True)
+    pose = Pose()
+    pose.position.z = 0.5*dim_Z
+    pose.orientation.w = 1.0
+    points, lines = init_graph_markers(nodes, edges, nodes_id=2, edges_id=3, pose=pose, nodes_color=color, edges_color=color, linewidth=0.003, is_path=True)
+    data_pub.publish(points)
+    data_pub.publish(lines)
 
     # visualize object path with markers
     # TODO: we might use the existing marker to copy the actual shape instead of using hard coded values
@@ -29,63 +37,20 @@ def visualize_object_trajectory(traj_msg):
         color = ColorRGBA(progress,0.0,1-progress,0.1)
         scale = Vector3(dim_X, dim_Y, dim_Z)
         pose.position.z = 0.5*dim_Z
-        markers.markers.append(getMarker(i, Marker.CUBE, scale=scale, pose=pose, color=color))
+        markers.markers.append(init_marker(i, Marker.CUBE, scale=scale, pose=pose, color=color))
 
     marker_pub.publish(markers)
 
 def visualize_planner_data(graph_msg):
-    visualize_graph(graph_msg.nodes, graph_msg.edges)
-
-def visualize_graph(nodes, edges, nodes_id=0, edges_id=1, 
-        nodes_color=ColorRGBA(0.0,0.0,0.0,1.0),
-        edges_color=ColorRGBA(0.0,0.0,0.0,0.5),
-        linewidth=0.001,
-        is_path=False):
-    global graph_pub
-
+    global data_pub
+    #visualize_graph(graph_msg.nodes, graph_msg.edges)
     pose = Pose()
-    pose.position.z = 0.5 * dim_Z
+    pose.position.z = 0.5*dim_Z
     pose.orientation.w = 1.0
-
-    point_width = 0.005 if is_path else 0.002
-    points = getMarker(nodes_id, Marker.POINTS, scale=Vector3(point_width, point_width, 0.0), pose=pose)
-    lines = getMarker(edges_id, Marker.LINE_LIST, scale=Vector3(linewidth,0,0), pose=pose, color=edges_color)
-
-    for i,(point, adjacent) in enumerate(zip(nodes, edges)):
-        points.points.append(point)
-        color = nodes_color
-
-        # change color if path is shown
-        if is_path:
-            if i == 0:
-                color = ColorRGBA(0.0,0.0,1.0,1.0)
-            elif i == len(nodes) - 1:
-                color = ColorRGBA(1.0,0.0,0.0,1.0)
-
-        points.colors.append(color)
-        for n in adjacent.node_ids:
-            lines.points.append(point)
-            lines.points.append(nodes[n])
-        
+    points, lines = init_graph_markers(graph_msg.nodes, graph_msg.edges, pose=pose)
     data_pub.publish(points)
     data_pub.publish(lines)
 
-def getMarker(marker_id, marker_type, pose=None, scale=None, color=None):
-    marker = Marker()
-    marker.header.frame_id = "/table_top"
-    marker.id = marker_id
-    marker.type = marker_type
-    marker.action = marker.ADD
-    marker.pose.orientation.w = 1.0
-    marker.color.a = 1.0
-
-    if scale is not None:
-        marker.scale = scale
-    if pose is not None:
-        marker.pose = pose
-    if color is not None:
-        marker.color = color
-    return marker
 
 def visualization_node():
     global marker_pub, data_pub
