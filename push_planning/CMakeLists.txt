@@ -15,7 +15,7 @@ find_package(catkin REQUIRED COMPONENTS
     roscpp)
 
 add_action_files(
-    DIRECTORY action 
+    DIRECTORY action
     FILES PushPlan.action)
 
 generate_messages(
