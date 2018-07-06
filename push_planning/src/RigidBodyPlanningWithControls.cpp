@@ -436,7 +436,10 @@ int main(int argc, char** argv)
 
     std::string predict_push_service = "predict_push_service";
 
-    if (pnh.getParam("launch_action_server")) {
+    bool run_test;
+    pnh.getParam("run_test", run_test);
+
+    if (!run_test) {
         push_planning::PushPlannerActionServer planner(nh, "push_planner_action_server",  predict_push_service);
         ros::spin();
     } else {
