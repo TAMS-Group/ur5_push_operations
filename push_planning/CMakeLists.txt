@@ -42,10 +42,6 @@ include_directories(
     ${catkin_INCLUDE_DIRS}
     )
 
-add_executable(push_planning_node src/RigidBodyPlanningWithControls.cpp)
-add_dependencies(push_planning_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
-
-target_link_libraries(push_planning_node
-    ${catkin_LIBRARIES}
-    ${OMPL_LIBRARIES}
-    )
+add_executable(push_planner_node src/push_planner_node.cpp)
+add_dependencies(push_planner_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+target_link_libraries(push_planner_node ${catkin_LIBRARIES} ${OMPL_LIBRARIES})
