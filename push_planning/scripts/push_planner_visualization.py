@@ -9,6 +9,9 @@ from graph_msgs.msg import GeometryGraph, Edges
 
 from lib.marker_helper import init_marker, init_graph_markers
 
+import actionlib
+from push_planning.msg import PushPlanAction, PushPlanGoal
+
 dim_X = 0.162
 dim_Y = 0.23
 dim_Z = 0.112
@@ -53,7 +56,7 @@ def visualize_planner_data(graph_msg):
 
 
 def visualization_node():
-    global marker_pub, data_pub
+    global marker_pub, data_pub, planner_client
     rospy.init_node('push_trajectory_visualization_node');
 
     traj_sub = rospy.Subscriber('/push_trajectory', PushTrajectory, visualize_object_trajectory, queue_size=1)
@@ -63,10 +66,30 @@ def visualization_node():
     data_pub = rospy.Publisher("/push_planner_graph_markers", Marker, queue_size=1)
     graph_pub = rospy.Publisher("/push_planner_graph_markers", Marker, queue_size=10)
 
+    planner_client = actionlib.SimpleActionClient('/push_plan_action', PushPlanAction)
 
     print "Ready to visualize push trajectories"
     rospy.spin()
 
+def call_push_plan_action(object_id, start_pose, goal_pose):
+    global planner_client
+
+    #create goal
+    goal = PushPlanGoal()
+    goal.object_id = object_id
+    goal.start_pose = start_pose
+    goal.goal_pose = goal_pose
+
+    # call client
+    planner_client.wait_for_server()
+    planner_client.send_goal(goal)
+    planner_client.wait_for_result()
+
+    # receive result
+    result = planner_client.get_result()
+
+
+
 if __name__=="__main__":
-    print "init predictive sampler node"
+    print "init push planner visualization node"
     visualization_node()
