@@ -92,7 +92,7 @@ bool isStateValid(const oc::SpaceInformation *si, const ob::State *state)
 }
 
 
-bool propagateWithPredictor(const ros::ServiceClient& predictor_,
+bool propagateWithPredictor(ros::ServiceClient& predictor,
         const ob::State *start, const oc::Control *control, const double duration, ob::State *result) {
 
     bool success = true;
@@ -108,7 +108,7 @@ bool propagateWithPredictor(const ros::ServiceClient& predictor_,
     msg.request.control.push_back(ctrl[2]);
 
     // predict push control
-    prediction_client_.call(msg);
+    predictor.call(msg);
 
     if(msg.response.success) {
 
@@ -440,7 +440,7 @@ int main(int argc, char** argv)
     pnh.getParam("run_test", run_test);
 
     if (!run_test) {
-        push_planning::PushPlannerActionServer planner(nh, "push_planner_action_server",  predict_push_service);
+        push_planning::PushPlannerActionServer planner(nh, "/push_plan_action",  predict_push_service);
         ros::spin();
     } else {
 
