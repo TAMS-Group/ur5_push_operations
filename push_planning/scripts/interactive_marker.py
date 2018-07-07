@@ -1,6 +1,11 @@
 #!/usr/bin/env python
 
+import copy
+
 import rospy
+import actionlib
+from push_planning.msg import PushPlanAction, PushPlanGoal
+
 
 from interactive_markers.interactive_marker_server import *
 from interactive_markers.menu_handler import *
@@ -8,11 +13,17 @@ from visualization_msgs.msg import *
 from geometry_msgs.msg import Point, Pose
 from std_msgs.msg import ColorRGBA
 
+import push_planner_visualization as ppv
+
 menu_handler = MenuHandler()
 
 dim_X = 0.162
 dim_Y = 0.23
 dim_Z = 0.112
+
+poses = {}
+START_POSE = "start pose"
+GOAL_POSE= "goal pose"
 
 #def processFeedback( feedback ):
 #    s = "Feedback from marker '" + feedback.marker_name
@@ -32,7 +43,15 @@ dim_Z = 0.112
 #    elif feedback.event_type == InteractiveMarkerFeedback.POSE_UPDATE:
 #        rospy.loginfo( s + ": pose changed")
 def processFeedback( feedback ):
-    print feedback
+    if(feedback.marker_name in [START_POSE, GOAL_POSE]):
+        poses[feedback.marker_name] = feedback.pose
+
+def onPlan( feedback ):
+    print "plan"
+    call_push_plan_action("object_id", poses[START_POSE], poses[GOAL_POSE])
+
+def onReset( feedback ):
+    print "reset"
 
 def getBox( dimX, dimY, dimZ, color=ColorRGBA(0.0,0.0,1.0,1.0) ):
     marker = Marker()
@@ -111,37 +130,65 @@ def makePlaneMarker( marker, name, pose, show_controls = False):
         control.interaction_mode = InteractiveMarkerControl.MOVE_AXIS
         int_marker.controls.append(control)
 
+
     server.insert(int_marker, processFeedback)
     menu_handler.apply( server, int_marker.name )
 
+def call_push_plan_action(object_id, start_pose, goal_pose):
+    global planner_client
+
+    #create goal
+    goal = PushPlanGoal()
+    goal.object_id = object_id
+    goal.start_pose = start_pose
+    goal.goal_pose = goal_pose
+
+    # call client
+    planner_client.wait_for_server()
+    planner_client.send_goal(goal)
+    planner_client.wait_for_result()
+
+    # receive result
+    result = planner_client.get_result()
+
+    ppv.visualize_object_trajectory(result.trajectory)
+    ppv.visualize_planner_data(result.planner_data)
+
 
 if __name__=="__main__":
+    global planner_client
     rospy.init_node("interactive_push_markers_node")
 
     server = InteractiveMarkerServer("push_object_controls")
 
-    #menu_handler.insert( "First Entry", callback=processFeedback )
-    #menu_handler.insert( "Second Entry", callback=processFeedback )
+    menu_handler.insert( "Plan", callback=onPlan )
+    menu_handler.insert( "Reset", callback=onReset )
     #sub_menu_handle = menu_handler.insert( "Submenu" )
     #menu_handler.insert( "First Entry", parent=sub_menu_handle, callback=processFeedback )
     #menu_handler.insert( "Second Entry", parent=sub_menu_handle, callback=processFeedback )
-    
-    sp = Pose()
-    sp.orientation.w = 1.0
-    sp.position.y = -0.2
-    sp.position.x = -0.2
 
-    gp = Pose()
-    gp.orientation.w = 1.0
-    gp.position.x = 0.2
-    gp.position.y = 0.2
+    start_pose = Pose()
+    start_pose.orientation.w = 1.0
+    start_pose.position.y = -0.2
+    start_pose.position.x = -0.2
+
+    goal_pose = copy.deepcopy(start_pose)
+    goal_pose.position.x = 0.2
+    goal_pose.position.y = 0.2
+    poses[START_POSE] = start_pose
+    poses[GOAL_POSE] = goal_pose
+
     start_box = getBox(dim_X, dim_Y, dim_Z)
+    makePlaneMarker( start_box, START_POSE, start_pose, True)
 
-    makePlaneMarker( start_box, "start pose", sp, True)
-
-    goal_box = getBox(dim_X, dim_Y, dim_Z, ColorRGBA(1.0,0.0,0.0,1.0) )
-    makePlaneMarker( goal_box, "goal pose", gp, True)
+    goal_box = copy.deepcopy(start_box)
+    goal_box.color = ColorRGBA(1.0,0.0,0.0,1.0)
+    makePlaneMarker( goal_box, GOAL_POSE, goal_pose, True)
 
     server.applyChanges()
+
+    ppv.init_publishers()
+
+    planner_client = actionlib.SimpleActionClient('/push_plan_action', PushPlanAction)
 
     rospy.spin()

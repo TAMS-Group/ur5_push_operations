@@ -9,8 +9,6 @@ from graph_msgs.msg import GeometryGraph, Edges
 
 from lib.marker_helper import init_marker, init_graph_markers
 
-import actionlib
-from push_planning.msg import PushPlanAction, PushPlanGoal
 
 dim_X = 0.162
 dim_Y = 0.23
@@ -55,41 +53,19 @@ def visualize_planner_data(graph_msg):
     data_pub.publish(lines)
 
 
-def visualization_node():
-    global marker_pub, data_pub, planner_client
-    rospy.init_node('push_trajectory_visualization_node');
-
+def init_subscribers():
     traj_sub = rospy.Subscriber('/push_trajectory', PushTrajectory, visualize_object_trajectory, queue_size=1)
     data_sub = rospy.Subscriber('/push_planner_graph', GeometryGraph, visualize_planner_data, queue_size=1)
 
+def init_publishers():
+    global marker_pub, data_pub
     marker_pub = rospy.Publisher("/push_trajectory_markers", MarkerArray, queue_size=1)
     data_pub = rospy.Publisher("/push_planner_graph_markers", Marker, queue_size=1)
-    graph_pub = rospy.Publisher("/push_planner_graph_markers", Marker, queue_size=10)
-
-    planner_client = actionlib.SimpleActionClient('/push_plan_action', PushPlanAction)
-
-    print "Ready to visualize push trajectories"
-    rospy.spin()
-
-def call_push_plan_action(object_id, start_pose, goal_pose):
-    global planner_client
-
-    #create goal
-    goal = PushPlanGoal()
-    goal.object_id = object_id
-    goal.start_pose = start_pose
-    goal.goal_pose = goal_pose
-
-    # call client
-    planner_client.wait_for_server()
-    planner_client.send_goal(goal)
-    planner_client.wait_for_result()
-
-    # receive result
-    result = planner_client.get_result()
-
-
 
 if __name__=="__main__":
     print "init push planner visualization node"
-    visualization_node()
+    rospy.init_node('push_trajectory_visualization_node');
+    init_subscribers()
+    init_publishers()
+    print "Ready to visualize push trajectories"
+    rospy.spin()
