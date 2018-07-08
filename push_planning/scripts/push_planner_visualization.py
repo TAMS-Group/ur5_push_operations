@@ -14,8 +14,10 @@ dim_X = 0.162
 dim_Y = 0.23
 dim_Z = 0.112
 
+
+
 def visualize_object_trajectory(traj_msg):
-    global marker_pub, data_pub
+    global marker_pub, marker_array_pub, visible_markers, visible_marker_arrays
     markers = MarkerArray()
 
     # visualize as graph
@@ -28,8 +30,10 @@ def visualize_object_trajectory(traj_msg):
     pose.position.z = 0.5*dim_Z
     pose.orientation.w = 1.0
     points, lines = init_graph_markers(nodes, edges, nodes_id=2, edges_id=3, pose=pose, nodes_color=color, edges_color=color, linewidth=0.003, is_path=True)
-    data_pub.publish(points)
-    data_pub.publish(lines)
+    marker_pub.publish(points)
+    marker_pub.publish(lines)
+    visible_markers.append(points)
+    visible_markers.append(lines)
 
     # visualize object path with markers
     # TODO: we might use the existing marker to copy the actual shape instead of using hard coded values
@@ -40,17 +44,34 @@ def visualize_object_trajectory(traj_msg):
         pose.position.z = 0.5*dim_Z
         markers.markers.append(init_marker(i, Marker.CUBE, scale=scale, pose=pose, color=color))
 
-    marker_pub.publish(markers)
+    marker_array_pub.publish(markers)
+    visible_marker_arrays.append(markers)
 
 def visualize_planner_data(graph_msg):
-    global data_pub
+    global marker_pub, visible_markers
     #visualize_graph(graph_msg.nodes, graph_msg.edges)
     pose = Pose()
     pose.position.z = 0.5*dim_Z
     pose.orientation.w = 1.0
     points, lines = init_graph_markers(graph_msg.nodes, graph_msg.edges, pose=pose)
-    data_pub.publish(points)
-    data_pub.publish(lines)
+    marker_pub.publish(points)
+    marker_pub.publish(lines)
+    visible_markers.append(points)
+    visible_markers.append(lines)
+
+def remove_all_markers():
+    global marker_pub, marker_array_pub, visible_markers, visible_marker_arrays
+    for marker in visible_markers:
+        marker.action = Marker.DELETE
+        marker_pub.publish(marker)
+
+    for marker_array in visible_marker_arrays:
+        for i in range(len(marker_array.markers)):
+            marker_array.markers[i].action = Marker.DELETE
+        marker_array_pub.publish(marker_array)
+
+    visible_markers = []
+    visible_marker_arrays = []
 
 
 def init_subscribers():
@@ -58,9 +79,11 @@ def init_subscribers():
     data_sub = rospy.Subscriber('/push_planner_graph', GeometryGraph, visualize_planner_data, queue_size=1)
 
 def init_publishers():
-    global marker_pub, data_pub
-    marker_pub = rospy.Publisher("/push_trajectory_markers", MarkerArray, queue_size=1)
-    data_pub = rospy.Publisher("/push_planner_graph_markers", Marker, queue_size=1)
+    global marker_pub, marker_array_pub, visible_markers, visible_marker_arrays
+    visible_markers = []
+    visible_marker_arrays = []
+    marker_array_pub = rospy.Publisher("/push_trajectory_markers", MarkerArray, queue_size=1)
+    marker_pub = rospy.Publisher("/push_planner_graph_markers", Marker, queue_size=1)
 
 if __name__=="__main__":
     print "init push planner visualization node"
