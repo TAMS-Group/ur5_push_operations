@@ -345,7 +345,6 @@ namespace push_planning {
             void setStateToPose(ob::ScopedState<ob::SE2StateSpace>& state, const geometry_msgs::Pose& pose){
                 state->setX(pose.position.x);
                 state->setY(pose.position.y);
-                state->setY(pose.position.z);
                 state->setYaw(tf::getYaw(pose.orientation));
             }
 
