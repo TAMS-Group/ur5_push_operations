@@ -3,55 +3,46 @@
 import copy
 
 import rospy
+from tf import TransformListener
 import actionlib
+
 from push_planning.msg import PushPlanAction, PushPlanGoal
+import push_planner_visualization as ppv
+
 
 
 from interactive_markers.interactive_marker_server import *
 from interactive_markers.menu_handler import *
 from visualization_msgs.msg import *
-from geometry_msgs.msg import Point, Pose
+from geometry_msgs.msg import Point, Pose, Quaternion
 from std_msgs.msg import ColorRGBA
 
-import push_planner_visualization as ppv
 
 menu_handler = MenuHandler()
+server = None
 
 dim_X = 0.162
 dim_Y = 0.23
 dim_Z = 0.112
 
-poses = {}
-START_POSE = "start pose"
-GOAL_POSE= "goal pose"
+reference_frame = "/table_top"
+object_frame = "/pushable_object_0"
 
-#def processFeedback( feedback ):
-#    s = "Feedback from marker '" + feedback.marker_name
-#    s += "' / control '" + feedback.control_name + "'"
-#
-#    mp = ""
-#    if feedback.mouse_point_valid:
-#        mp = " at " + str(feedback.mouse_point.x)
-#        mp += ", " + str(feedback.mouse_point.y)
-#        mp += ", " + str(feedback.mouse_point.z)
-#        mp += " in frame " + feedback.header.frame_id
-#
-#    if feedback.event_type == InteractiveMarkerFeedback.BUTTON_CLICK:
-#        rospy.loginfo( s + ": button click" + mp + "." )
-#    elif feedback.event_type == InteractiveMarkerFeedback.MENU_SELECT:
-#        rospy.loginfo( s + ": menu item " + str(feedback.menu_entry_id) + " clicked" + mp + "." )
-#    elif feedback.event_type == InteractiveMarkerFeedback.POSE_UPDATE:
-#        rospy.loginfo( s + ": pose changed")
-def processFeedback( feedback ):
-    if(feedback.marker_name in [START_POSE, GOAL_POSE]):
-        poses[feedback.marker_name] = feedback.pose
+START = "start pose"
+GOAL= "goal pose"
 
-def onPlan( feedback ):
-    print "plan"
-    call_push_plan_action("object_id", poses[START_POSE], poses[GOAL_POSE])
+poses = { START: Pose(Point(-0.2, -0.2, 0.0), Quaternion(0.0, 0.0, 0.0, 1.0)),
+          GOAL: Pose(Point(0.2, 0.2, 0.0), Quaternion(0.0, 0.0, 0.0, 1.0)) }
 
-def onReset( feedback ):
-    print "reset"
+colors = { START: ColorRGBA(0.0,0.0,1.0,1.0),
+           GOAL: ColorRGBA(1.0,0.0,0.0,1.0) }
+
+start_pose_is_interactive = True
+
+# TODO: handle unknown object pose if not start_pose_is_interactive
+
+
+# marker/control instatniation
 
 def getBox( dimX, dimY, dimZ, color=ColorRGBA(0.0,0.0,1.0,1.0) ):
     marker = Marker()
@@ -70,13 +61,12 @@ def makeBoxControl( msg, marker ):
     msg.controls.append( control )
     return control
 
-def saveMarker( int_marker ):
-  server.insert(int_marker, processFeedback)
-
-def makePlaneMarker( marker, name, pose, show_controls = False):
+def makePlanarIntMarker( name, active = True):
+    marker = getBox(dim_X, dim_Y, dim_Z, colors[name])
+    marker.color.a = 1.0 if active else 0.1
     int_marker = InteractiveMarker()
-    int_marker.header.frame_id = "table_top"
-    int_marker.pose = pose
+    int_marker.header.frame_id = reference_frame
+    int_marker.pose = poses[name]
     int_marker.pose.position.z = marker.scale.z * .5
     int_marker.scale = 0.5
 
@@ -91,7 +81,7 @@ def makePlaneMarker( marker, name, pose, show_controls = False):
     int_marker.controls[0].orientation.y = 1
     int_marker.controls[0].orientation.z = 0
     
-    if show_controls: 
+    if active: 
 
         control = InteractiveMarkerControl()
         control.orientation.w = 1
@@ -131,7 +121,7 @@ def makePlaneMarker( marker, name, pose, show_controls = False):
         int_marker.controls.append(control)
 
 
-    server.insert(int_marker, processFeedback)
+    server.insert(int_marker, onMove)
     menu_handler.apply( server, int_marker.name )
 
 def call_push_plan_action(object_id, start_pose, goal_pose):
@@ -142,6 +132,8 @@ def call_push_plan_action(object_id, start_pose, goal_pose):
     goal.object_id = object_id
     goal.start_pose = start_pose
     goal.goal_pose = goal_pose
+
+    print start_pose, goal_pose
 
     # call client
     planner_client.wait_for_server()
@@ -155,40 +147,101 @@ def call_push_plan_action(object_id, start_pose, goal_pose):
     ppv.visualize_planner_data(result.planner_data)
 
 
-if __name__=="__main__":
-    global planner_client
-    rospy.init_node("interactive_push_markers_node")
+def reset_markers(active=True):
+    if start_pose_is_interactive:
+        makePlanarIntMarker( START, active)
 
-    server = InteractiveMarkerServer("push_object_controls")
+    makePlanarIntMarker( GOAL, active)
+    server.applyChanges()
+
+def get_object_pose(object_frame, reference_frame):
+    pose = None
+    tf_l = TransformListener()
+    if (tf_l.frameExists(object_frame) and tf_l.frameExists(reference_frame)):
+        t = tf_l.getLatestCommonTime(object_frame, reference_frame)
+        p,q = tf_l.lookupTransform(object_frame, reference_frame, t)
+        pose = Pose(Point(*p), Quaternion(*q))
+    return pose
+
+
+# Callbacks
+
+def onMove( feedback ):
+    global highlight_solution
+    event = feedback.event_type
+    name = feedback.marker_name
+
+    if event == feedback.MOUSE_UP:
+        if(name == GOAL or ( start_pose_is_interactive and name == START) ):
+            poses[name] = feedback.pose
+
+    if event == feedback.MOUSE_DOWN:
+        # if solution is highlighted and markers are hidden - show them again
+        if highlight_solution:
+            ppv.remove_all_markers()
+            highlight_solution = False
+            reset_markers(True)
+
+
+def onPlan( feedback ):
+    global highlight_solution
+    print "plan"
+
+    # set start pose
+    start_pose = poses[START]
+    if not start_pose_is_interactive:
+        pose = get_object_pose(object_frame, reference_frame)
+        if pose is not None:
+            start_pose = pose
+
+    # call action
+    call_push_plan_action("object_id", start_pose, poses[GOAL])
+
+    # hide markers
+    highlight_solution = True
+    reset_markers(False)
+
+
+def onReset( feedback ):
+    global highlight_solution
+    print "reset"
+    highlight_solution = False
+    reset_markers(True)
+
+
+def onExecute( feedback ):
+    print "execute"
+
+def init_interaction_server():
+    global planner_client, highlight_solution
+
+    highlight_solution = False
+
 
     menu_handler.insert( "Plan", callback=onPlan )
     menu_handler.insert( "Reset", callback=onReset )
-    #sub_menu_handle = menu_handler.insert( "Submenu" )
-    #menu_handler.insert( "First Entry", parent=sub_menu_handle, callback=processFeedback )
-    #menu_handler.insert( "Second Entry", parent=sub_menu_handle, callback=processFeedback )
+    menu_handler.insert( "Execute", callback=onExecute )
 
-    start_pose = Pose()
-    start_pose.orientation.w = 1.0
-    start_pose.position.y = -0.2
-    start_pose.position.x = -0.2
+    start_pose_is_interactive = rospy.get_param('start_pose_is_interactive', True)
 
-    goal_pose = copy.deepcopy(start_pose)
-    goal_pose.position.x = 0.2
-    goal_pose.position.y = 0.2
-    poses[START_POSE] = start_pose
-    poses[GOAL_POSE] = goal_pose
+    # set goal pose to object pose on start
+    if not start_pose_is_interactive:
+        pose = get_object_pose(object_frame, reference_frame)
+        if pose is not None:
+            poses[GOAL] = Pose(Point(*p), Quaternion(*q))
+        else:
+            print "Error! Object pose could not be found"
 
-    start_box = getBox(dim_X, dim_Y, dim_Z)
-    makePlaneMarker( start_box, START_POSE, start_pose, True)
-
-    goal_box = copy.deepcopy(start_box)
-    goal_box.color = ColorRGBA(1.0,0.0,0.0,1.0)
-    makePlaneMarker( goal_box, GOAL_POSE, goal_pose, True)
-
-    server.applyChanges()
+    reset_markers(True)
 
     ppv.init_publishers()
 
     planner_client = actionlib.SimpleActionClient('/push_plan_action', PushPlanAction)
 
+
+
+if __name__=="__main__":
+    rospy.init_node("interactive_push_markers_node")
+    server = InteractiveMarkerServer("push_object_controls")
+    init_interaction_server()
     rospy.spin()
