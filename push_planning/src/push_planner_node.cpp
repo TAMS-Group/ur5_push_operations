@@ -284,8 +284,8 @@ void planWithPushControl()
     // set the start and goal states
     ss.setStartAndGoalStates(start, goal, 0.05);
 
-    //ss.setPlanner(std::make_shared<oc::RRT>(ss.getSpaceInformation()));
-    //ss.getSpaceInformation()->setMinMaxControlDuration(1,100);
+    ss.setPlanner(std::make_shared<oc::RRT>(ss.getSpaceInformation()));
+    ss.getSpaceInformation()->setMinMaxControlDuration(1,100);
     // attempt to solve the problem within one second of planning time
     ob::PlannerStatus solved = ss.solve(10.0);
 
@@ -306,8 +306,75 @@ void planWithPushControl()
 }
 
 
+class PushStatePropagator : public oc::StatePropagator
+{
+	private:
+		ros::ServiceClient * const predictor_;
 
+	public:
 
+	PushStatePropagator(const oc::SpaceInformationPtr &si, ros::ServiceClient& predictor) : oc::StatePropagator(si), predictor_(&predictor)
+	{
+	}
+
+	void propagate(const ob::State *start, const oc::Control *control, const double duration, ob::State *result) const override
+	{
+		bool success = true;
+
+		const auto *se2state = start->as<ob::SE2StateSpace::StateType>();
+		const double* pos = se2state->as<ob::RealVectorStateSpace::StateType>(0)->values;
+		const double yaw = se2state->as<ob::SO2StateSpace::StateType>(1)->value;
+		const double* ctrl = control->as<oc::RealVectorControlSpace::ControlType>()->values;
+
+		tams_ur5_push_execution::PredictPush msg;
+		msg.request.control.push_back(ctrl[0]);
+		msg.request.control.push_back(ctrl[1]);
+		msg.request.control.push_back(ctrl[2]);
+
+		// predict push control
+		predictor_->call(msg);
+
+		if(msg.response.success) {
+
+			geometry_msgs::Pose np = msg.response.next_pose;
+			geometry_msgs::Quaternion q = np.orientation;
+			Eigen::Quaterniond next_q(q.w, q.x, q.y, q.z);
+			double next_yaw = next_q.toRotationMatrix().eulerAngles(0,1,2)[2];
+
+			// create new state
+			Eigen::Affine2d next_pos = Eigen::Translation2d(pos[0], pos[1]) 
+				* Eigen::Rotation2Dd(yaw) * Eigen::Translation2d(np.position.x, np.position.y);
+
+			// set result state
+			result->as<ob::SE2StateSpace::StateType>()->setXY(
+					next_pos.translation().x(),
+					next_pos.translation().y());
+			result->as<ob::SE2StateSpace::StateType>()->setYaw( yaw + next_yaw );
+
+		} else {
+			ROS_ERROR_STREAM("Predict Push service call failed!");
+			result->as<ob::SE2StateSpace::StateType>()->setXY(pos[0], pos[1]);
+			result->as<ob::SE2StateSpace::StateType>()->setYaw(yaw);
+			success = false;
+		}
+	}
+
+	bool canPropagateBackward()
+	{
+		return false;
+	}
+
+	//	bool canSteer()
+	//	{
+	//		return true;
+	//	}
+
+	//	void steer(const ob::State *start, const ob::State *to, oc::Control *control, const double duration)
+//	{
+//		return true;
+//	}
+
+};
 
 
 
@@ -320,10 +387,14 @@ namespace push_planning {
         private:
             actionlib::SimpleActionServer<PushPlanAction> as_;
             ros::ServiceClient predictor_;
+            ros::NodeHandle nh_;
+            std::string prediction_service_name_;
 
         public:
             PushPlannerActionServer(ros::NodeHandle& nh, const std::string& action_name, const std::string& prediction_service_name) :
-                as_(nh, action_name, boost::bind(&PushPlannerActionServer::executeCB, this, _1), false)
+                as_(nh, action_name, boost::bind(&PushPlannerActionServer::executeCB, this, _1), false),
+                nh_(nh),
+                prediction_service_name_(prediction_service_name)
         {
             if(ros::service::waitForService(prediction_service_name)) {
                 predictor_ = nh.serviceClient<tams_ur5_push_execution::PredictPush>(prediction_service_name);
@@ -351,6 +422,12 @@ namespace push_planning {
             //void propagate(const ob::State *start, const oc::Control *control, const double duration, ob::State *result) {
             //    propagateWithPredictor(predictor_, start, control, duration, result);
             //}
+	    //
+
+	    void initSteeredStatePropagator(ompl::control::StatePropagatorPtr propagator)
+	    {
+
+	    }
 
             bool plan(const PushPlanGoalConstPtr& goal, PushPlanResult& result)
             {
@@ -384,11 +461,13 @@ namespace push_planning {
                 // define a simple setup class
                 oc::SimpleSetup ss(cspace);
 
+                oc::StatePropagatorPtr push_propagator(std::make_shared<PushStatePropagator>(ss.getSpaceInformation(), predictor_));
+                ss.setStatePropagator(push_propagator);
+
                 // set the state propagation routine
-                ss.setStatePropagator(propagate);
-                ss.setStatePropagator( 
-                        [&](const ob::State *start, const oc::Control *control, const double duration, ob::State *result)
-                        { propagateWithPredictor(predictor_, start, control, duration, result); } );
+                //ss.setStatePropagator( 
+                //        [&](const ob::State *start, const oc::Control *control, const double duration, ob::State *result)
+                //        { propagateWithPredictor(predictor_, start, control, duration, result); } );
 
                 // set state validity checking for this space
                 ss.setStateValidityChecker(
