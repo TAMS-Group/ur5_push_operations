@@ -1,8 +1,10 @@
 <launch>
-	<node pkg="push_planning" type="push_planner_node" name="push_planner_node" output="screen"/>
+	<node pkg="push_planning" type="push_planner_node" name="push_planner_node" output="screen">
+		<param name="spawn_collision_object_test" value="false"/>
+	</node>
 
-	<node pkg="push_planning" type="interactive_marker.py" name="push_planner_interaction">
-		<param name="start_pose_is_interactive" value="true"/>
+	<node pkg="push_planning" type="interactive_marker.py" name="push_planner_interaction" output="screen">
+		<param name="start_pose_is_interactive" value="false"/>
 	</node>
 
 	<node pkg="push_prediction" type="prediction_node.py" name="prediction_node"/>

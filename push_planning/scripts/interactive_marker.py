@@ -3,12 +3,16 @@
 import copy
 
 import rospy
+import tf
 from tf import TransformListener
 import actionlib
 
 from push_planning.msg import PushPlanAction, PushPlanGoal
 import push_planner_visualization as ppv
 
+
+from tams_ur5_push_execution.srv import ExecutePush, ExecutePushRequest, ExecutePushResponse
+from tams_ur5_push_execution.msg import MoveObjectAction, MoveObjectGoal, MoveObjectResult
 
 
 from interactive_markers.interactive_marker_server import *
@@ -25,8 +29,8 @@ dim_X = 0.162
 dim_Y = 0.23
 dim_Z = 0.112
 
-reference_frame = "/table_top"
-object_frame = "/pushable_object_0"
+reference_frame = "table_top"
+object_frame = "pushable_object_0"
 
 START = "start pose"
 GOAL= "goal pose"
@@ -36,10 +40,6 @@ poses = { START: Pose(Point(-0.2, -0.2, 0.0), Quaternion(0.0, 0.0, 0.0, 1.0)),
 
 colors = { START: ColorRGBA(0.0,0.0,1.0,1.0),
            GOAL: ColorRGBA(1.0,0.0,0.0,1.0) }
-
-start_pose_is_interactive = True
-
-# TODO: handle unknown object pose if not start_pose_is_interactive
 
 
 # marker/control instatniation
@@ -51,7 +51,6 @@ def getBox( dimX, dimY, dimZ, color=ColorRGBA(0.0,0.0,1.0,1.0) ):
     marker.scale.y = dimY
     marker.scale.z = dimZ
     marker.color = color
-
     return marker
 
 def makeBoxControl( msg, marker ):
@@ -125,7 +124,7 @@ def makePlanarIntMarker( name, active = True):
     menu_handler.apply( server, int_marker.name )
 
 def call_push_plan_action(object_id, start_pose, goal_pose):
-    global planner_client
+    global planner_client, last_solution
 
     #create goal
     goal = PushPlanGoal()
@@ -142,12 +141,14 @@ def call_push_plan_action(object_id, start_pose, goal_pose):
 
     # receive result
     result = planner_client.get_result()
+    last_solution = result
 
     ppv.visualize_object_trajectory(result.trajectory)
     ppv.visualize_planner_data(result.planner_data)
 
 
 def reset_markers(active=True):
+    global start_pose_is_interactive
     if start_pose_is_interactive:
         makePlanarIntMarker( START, active)
 
@@ -157,17 +158,22 @@ def reset_markers(active=True):
 def get_object_pose(object_frame, reference_frame):
     pose = None
     tf_l = TransformListener()
-    if (tf_l.frameExists(object_frame) and tf_l.frameExists(reference_frame)):
-        t = tf_l.getLatestCommonTime(object_frame, reference_frame)
-        p,q = tf_l.lookupTransform(object_frame, reference_frame, t)
-        pose = Pose(Point(*p), Quaternion(*q))
+    try:
+        print object_frame, reference_frame
+        tf_l.waitForTransform(object_frame, reference_frame, rospy.Time(0), rospy.Duration(5.0))
+        if (tf_l.frameExists(object_frame) and tf_l.frameExists(reference_frame)):
+            p,q = tf_l.lookupTransform(object_frame, reference_frame, rospy.Time(0))
+            pose = Pose(Point(*p), Quaternion(*q))
+    except (tf.LookupException, tf.ConnectivityException):
+        print "Unable to retrieve object pose!"
+
     return pose
 
 
 # Callbacks
 
 def onMove( feedback ):
-    global highlight_solution
+    global highlight_solution, start_pose_is_interactive
     event = feedback.event_type
     name = feedback.marker_name
 
@@ -184,7 +190,7 @@ def onMove( feedback ):
 
 
 def onPlan( feedback ):
-    global highlight_solution
+    global highlight_solution, start_pose_is_interactive
     print "plan"
 
     # set start pose
@@ -209,26 +215,42 @@ def onReset( feedback ):
     reset_markers(True)
 
 
+#def onExecute( feedback ):
+#    global last_solution
+#    print "execute"
+#    rospy.wait_for_service("push_execution")
+#    print "found service"
+#    execute_push = rospy.ServiceProxy("push_execution", ExecutePush)
+#    for push in last_solution.trajectory.pushes:
+#        print "execute push", push
+#        resp = execute_push(push)
+#        if not resp.result:
+#            break
+
 def onExecute( feedback ):
-    print "execute"
+    global last_solution
+    client = actionlib.SimpleActionClient("move_object_action", MoveObjectAction)
+    client.wait_for_server()
+    for pose in last_solution.trajectory.poses:
+        goal = MoveObjectGoal(object_id=object_frame, target=pose)
+        client.send_goal(goal)
+        client.wait_for_result()
 
 def init_interaction_server():
-    global planner_client, highlight_solution
+    global planner_client, highlight_solution, start_pose_is_interactive
 
     highlight_solution = False
-
-
     menu_handler.insert( "Plan", callback=onPlan )
     menu_handler.insert( "Reset", callback=onReset )
     menu_handler.insert( "Execute", callback=onExecute )
 
-    start_pose_is_interactive = rospy.get_param('start_pose_is_interactive', True)
+    start_pose_is_interactive = rospy.get_param('start_pose_is_interactive', False)
 
     # set goal pose to object pose on start
     if not start_pose_is_interactive:
         pose = get_object_pose(object_frame, reference_frame)
         if pose is not None:
-            poses[GOAL] = Pose(Point(*p), Quaternion(*q))
+            poses[GOAL] = pose
         else:
             print "Error! Object pose could not be found"
 

@@ -12,6 +12,10 @@ find_package(catkin REQUIRED COMPONENTS
     geometry_msgs
     eigen_conversions
     message_generation
+    moveit_msgs
+    moveit_core
+    moveit_ros_planning
+    moveit_ros_planning_interface
     roscpp)
 
 add_action_files(

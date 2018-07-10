@@ -63,9 +63,16 @@
 #include <tams_ur5_push_execution/PredictPush.h>
 #include <tams_ur5_push_execution/PushTrajectory.h>
 #include <graph_msgs/GeometryGraph.h>
+#include <shape_msgs/SolidPrimitive.h>
 #include <geometry_msgs/Pose.h>
+#include <moveit_msgs/CollisionObject.h>
+#include <moveit_msgs/AttachedCollisionObject.h>
 #include <geometry_msgs/Quaternion.h>
 #include <push_planning/PushPlanAction.h>
+
+#include <moveit/planning_scene/planning_scene.h>
+#include <moveit/planning_scene_interface/planning_scene_interface.h>
+#include <moveit/planning_scene_monitor/planning_scene_monitor.h>
 
 namespace ob = ompl::base;
 namespace oc = ompl::control;
@@ -107,7 +114,11 @@ void pathControlToPushTrajectoryMsg(const ompl::control::PathControl& solution, 
         Eigen::Quaterniond q(Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ()));
         tf::quaternionEigenToMsg(q, pose.orientation);
         traj_msg.poses.push_back(pose);
-        //traj_msg.pushes.push_back(push);
+
+	// TODO: implement control->push conversion
+        //const double* ctrl = solution.getControl(i)->as<oc::RealVectorControlSpace::ControlType>()->values;
+	//tams_ur5_push_execution::PushApproach push;
+        traj_msg.pushes.push_back(push);
     }
 }
 
@@ -153,33 +164,72 @@ void publishPlannerData(const ompl::base::PlannerData& data) {
     graph_pub_.publish(graph_msg);
 }
 
+moveit_msgs::AttachedCollisionObject getAttachedCollisionObject(const double& x, const double& y, const double& z){
+    moveit_msgs::AttachedCollisionObject obj;
+    obj.link_name = "s_model_tool0";
+    obj.object.header.frame_id = "/table_top";
+    obj.object.id = "pushable_object";
+    shape_msgs::SolidPrimitive primitive;
+    primitive.type = primitive.BOX;
+    primitive.dimensions.push_back(x);
+    primitive.dimensions.push_back(y);
+    primitive.dimensions.push_back(z);
+    obj.object.primitives.push_back(primitive);
+    return obj;
+}
 
 class PushStateValidityChecker : public ob::StateValidityChecker
 {
     private:
         const oc::SpaceInformationPtr si_;
+        const planning_scene::PlanningScenePtr scene_;
+
+        const double dimX = 0.162;
+        const double dimY = 0.23;
+        const double dimZ = 0.112;
+
     public:
-        PushStateValidityChecker(const oc::SpaceInformationPtr &si) : ob::StateValidityChecker(si), si_(si)
+        PushStateValidityChecker(const oc::SpaceInformationPtr &si, const planning_scene::PlanningScenePtr scene) : ob::StateValidityChecker(si), si_(si), scene_(scene)
     {
+
     }
 
         bool isValid(const ob::State *state) const override
         {
             //    ob::ScopedState<ob::SE2StateSpace>
             // cast the abstract state type to the type we expect
+            //const auto *se2state = state->as<ob::SE2StateSpace::StateType>();
+
+            //// extract the first component of the state and cast it to what we expect
+            //const auto *pos = se2state->as<ob::RealVectorStateSpace::StateType>(0);
+
+            //// extract the second component of the state and cast it to what we expect
+            //const auto *rot = se2state->as<ob::SO2StateSpace::StateType>(1);
+
+            //// check validity of state defined by pos & rot
+
+
+            //// return a value that is always true but uses the two variables we define, so we avoid compiler warnings
+            return si_->satisfiesBounds(state) && !isStateColliding(state);
+        }
+
+        bool isStateColliding(const ob::State *state) const
+        {
+            moveit_msgs::AttachedCollisionObject obj = getAttachedCollisionObject(dimX, dimY, dimZ);
+            obj.object.operation = moveit_msgs::CollisionObject::ADD;
+
+            // create object pose
             const auto *se2state = state->as<ob::SE2StateSpace::StateType>();
 
-            // extract the first component of the state and cast it to what we expect
-            const auto *pos = se2state->as<ob::RealVectorStateSpace::StateType>(0);
+            geometry_msgs::Pose pose;
+            pose.position.x = se2state->getX();
+            pose.position.y = se2state->getY();
+            pose.position.z = 0.5 * dimZ + 0.001;
+	    tf::quaternionTFToMsg(tf::createQuaternionFromYaw(se2state->getYaw()), pose.orientation);
 
-            // extract the second component of the state and cast it to what we expect
-            const auto *rot = se2state->as<ob::SO2StateSpace::StateType>(1);
-
-            // check validity of state defined by pos & rot
-
-
-            // return a value that is always true but uses the two variables we define, so we avoid compiler warnings
-            return si_->satisfiesBounds(state) && (const void*)rot != (const void*)pos;
+            obj.object.primitive_poses.push_back(pose);
+            scene_->processAttachedCollisionObjectMsg(obj);
+            return scene_->isStateColliding();
         }
 };
 
@@ -201,11 +251,11 @@ class PushStatePropagator : public oc::StatePropagator
 
             const double* ctrl = control->as<oc::RealVectorControlSpace::ControlType>()->values;
 
-	    // extract start state
+            // extract start state
             const auto *se2state = start->as<ob::SE2StateSpace::StateType>();
-	    const double x = se2state->getX();
-	    const double y = se2state->getY();
-	    const double yaw = se2state->getYaw();
+            const double x = se2state->getX();
+            const double y = se2state->getY();
+            const double yaw = se2state->getYaw();
 
             tams_ur5_push_execution::PredictPush msg;
             msg.request.control.push_back(ctrl[0]);
@@ -215,7 +265,7 @@ class PushStatePropagator : public oc::StatePropagator
             // predict push control effect
             predictor_->call(msg);
 
-            if(msg.response.success) {
+            if (msg.response.success) {
 
                 geometry_msgs::Pose np = msg.response.next_pose;
                 geometry_msgs::Quaternion q = np.orientation;
@@ -254,7 +304,6 @@ class PushStatePropagator : public oc::StatePropagator
         //	{
         //		return true;
         //	}
-
 };
 
 
@@ -300,16 +349,6 @@ namespace push_planning {
                 state->setYaw(tf::getYaw(pose.orientation));
             }
 
-            //void propagate(const ob::State *start, const oc::Control *control, const double duration, ob::State *result) {
-            //    propagateWithPredictor(predictor_, start, control, duration, result);
-            //}
-            //
-
-            void initSteeredStatePropagator(ompl::control::StatePropagatorPtr propagator)
-            {
-
-            }
-
             bool plan(const PushPlanGoalConstPtr& goal, PushPlanResult& result)
             {
                 bool success = true;
@@ -351,8 +390,21 @@ namespace push_planning {
                 //        { propagateWithPredictor(predictor_, start, control, duration, result); } );
 
 
-                // set state validity checking for this space
-                ob::StateValidityCheckerPtr checker(std::make_shared<PushStateValidityChecker>(ss.getSpaceInformation()));
+                // load current planning scene
+		moveit::planning_interface::PlanningSceneInterface psi;
+		std::map<std::string, moveit_msgs::CollisionObject> cobjs = psi.getObjects();
+
+
+                // apply collision object to planning scene of StateValidityChecker as well
+                planning_scene_monitor::PlanningSceneMonitor psm("robot_description");
+                psm.startStateMonitor();
+                psm.waitForCurrentRobotState(ros::Time::now());
+                planning_scene::PlanningScenePtr scene(psm.getPlanningScene());
+		for (auto& cobj : cobjs) {
+			scene->processCollisionObjectMsg(cobj.second);
+		}
+
+                ob::StateValidityCheckerPtr checker(std::make_shared<PushStateValidityChecker>(ss.getSpaceInformation(), scene));
                 ss.setStateValidityChecker(checker);
                 //ss.setStateValidityChecker(
                 //        [&ss](const ob::State *state) { return isStateValid(ss.getSpaceInformation().get(), state); });
@@ -397,6 +449,26 @@ int main(int argc, char** argv)
 
     ros::NodeHandle nh;
     ros::NodeHandle pnh("~");
+
+    bool spawn_cobj;
+    nh.param("spawn_collision_object_test", spawn_cobj, false);
+    if(spawn_cobj) {
+        moveit::planning_interface::PlanningSceneInterface psi;
+        moveit_msgs::CollisionObject cobj;
+        cobj.id = "collision_object";
+        cobj.header.frame_id = "/table_top";
+        shape_msgs::SolidPrimitive primitive;
+        cobj.operation = cobj.ADD;
+        primitive.type = primitive.CYLINDER;
+        primitive.dimensions.push_back(0.3);
+        primitive.dimensions.push_back(0.04);
+        cobj.primitives.push_back(primitive);
+        geometry_msgs::Pose pose;
+        pose.position.z = 0.15;
+        pose.orientation.w = 1.0;
+        cobj.primitive_poses.push_back(pose);
+        psi.applyCollisionObject(cobj);
+    }
 
     std::string predict_push_service = "predict_push_service";
 
