@@ -29,6 +29,7 @@
 #include <tams_ur5_push_execution/PushApproach.h>
 #include <tams_ur5_push_execution/PerformRandomPush.h>
 #include <tams_ur5_push_execution/PusherMovement.h>
+#include <tams_ur5_push_execution/ExecutePush.h>
 #include <tams_ur5_push_execution/SamplePredictivePush.h>
 
 
@@ -640,7 +641,8 @@ namespace tams_ur5_push_execution
             actionlib::SimpleActionServer<ExplorePushesAction> explore_pushes_server_;
             actionlib::SimpleActionServer<MoveObjectAction> move_object_server_;
 
-            ros::ServiceServer execution_service_;
+            ros::ServiceServer point_service_;
+            ros::ServiceServer push_execution_service_;
 
             ros::ServiceClient push_sampler_;
 
@@ -661,13 +663,28 @@ namespace tams_ur5_push_execution
 
             bool pointAtBox(PusherMovement::Request& req, PusherMovement::Response& res)
             {
-                res.success = isPusherAvailable() && push_execution_->pointAtBox(pusher_);
-                return true;
+              res.success = isPusherAvailable() && push_execution_->pointAtBox(pusher_);
+              return true;
+            }
+
+            bool executePush(ExecutePush::Request& req, ExecutePush::Response& res)
+            {
+                ROS_ERROR_STREAM("Received push request" << req);
+                res.result = false;
+                //res.success = isPusherAvailable() && push_execution_->pointAtBox(pusher_);
+                if (!service_busy_ && isPusherAvailable()) {
+                    service_busy_ = true;
+                    id_count_++;
+                    push_execution_->reset();
+                    res.result = push_execution_->performPush(pusher_, req.push, id_count_, execute_);
+                }
+                service_busy_ = false;
+                return res.result;
             }
 
             void acceptExplorePushesGoal()
             {
-                ExplorePushesGoal goal = (*explore_pushes_server_.acceptNewGoal());
+              ExplorePushesGoal goal = (*explore_pushes_server_.acceptNewGoal());
                 ExplorePushesFeedback feedback;
                 ExplorePushesResult result;
                 result.attempts = 0;
@@ -872,7 +889,8 @@ namespace tams_ur5_push_execution
             ros::NodeHandle pnh("~");
             pnh.param("take_snapshots", take_snapshots_, false);
             pnh.param("execute", execute_, false);
-            execution_service_ = nh.advertiseService("point_at_box", &PushExecutionServer::pointAtBox, this);
+            point_service_ = nh.advertiseService("point_at_box", &PushExecutionServer::pointAtBox, this);
+            push_execution_service_ = nh.advertiseService("push_execution", &PushExecutionServer::executePush, this);
             push_sampler_= nh.serviceClient<SamplePredictivePush>("predictive_push_sampler");
 
             isPusherAvailable();
