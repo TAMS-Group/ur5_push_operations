@@ -11,12 +11,19 @@ from sklearn.externals import joblib
 from lib import load_samples
 from lib.content_helper import *
 
+from keras.models import load_model
+import tensorflow as tf
+
 import glob
 import os
 
 from math import *
 
 import matplotlib.pyplot as plt
+
+MINV=[-0.04123226483869708, -0.031217403199005074, -0.22898143957295725]
+MAXV=[0.03178563295947549, 0.029346353059715446, 0.26358129169260636]
+
 
 def train_model(X, Y, model='neural'):
     if model=='neural':
@@ -128,40 +135,66 @@ def initialize_models():
 
 class PushPredictor(object):
 
-    def __init__(self):
+    def __init__(self, use_keras=False):
+        self.use_keras = use_keras
         filepath = os.path.dirname(os.path.realpath(__file__))
-        x_model_file = filepath+'/x_model.pkl'
-        y_model_file = filepath+'/y_model.pkl'
-        yaw_model_file = filepath+'/yaw_model.pkl'
-        print filepath
-        dump_files = glob.glob(filepath+'/*.pkl')
-        if all(f in dump_files for f in [x_model_file, y_model_file, yaw_model_file]):
-            print "Model dumps found - loading x/y/yaw models"
-            x_model = joblib.load(x_model_file)
-            y_model = joblib.load(y_model_file)
-            yaw_model = joblib.load(yaw_model_file)
+        if self.use_keras:
+            self.graph = tf.Graph()
+            with self.graph.as_default():
+                self.session = tf.Session()
+                with self.session.as_default():
+                    self.model = load_model(filepath+'/keras_model.h5')
         else:
-            print "No model dumps found - initializing new ones and dumping to files for later sessions."
-            x_model, y_model, _, yaw_model = initialize_models()
-            joblib.dump(x_model, x_model_file)
-            joblib.dump(y_model, y_model_file)
-            joblib.dump(yaw_model, yaw_model_file)
-            
-        self.x_model = x_model
-        self.y_model = y_model
-        self.yaw_model = yaw_model
+            x_model_file = filepath+'/x_model.pkl'
+            y_model_file = filepath+'/y_model.pkl'
+            yaw_model_file = filepath+'/yaw_model.pkl'
+            print filepath
+            dump_files = glob.glob(filepath+'/*.pkl')
+            if all(f in dump_files for f in [x_model_file, y_model_file, yaw_model_file]):
+                print "Model dumps found - loading x/y/yaw models"
+                x_model = joblib.load(x_model_file)
+                y_model = joblib.load(y_model_file)
+                yaw_model = joblib.load(yaw_model_file)
+            else:
+                print "No model dumps found - initializing new ones and dumping to files for later sessions."
+                x_model, y_model, _, yaw_model = initialize_models()
+                joblib.dump(x_model, x_model_file)
+                joblib.dump(y_model, y_model_file)
+                joblib.dump(yaw_model, yaw_model_file)
+                
+            self.x_model = x_model
+            self.y_model = y_model
+            self.yaw_model = yaw_model
         print "Predictor ready!"
 
     def predict_next_pose(self, push, start_pose):
         prediction = self.predict_pose(push)
         return transform_pose(start_pose, prediction)
 
+    def normalize_prediction(self,prediction):
+        result = []
+        for i,p in enumerate(prediction):
+            result.append(MINV[i] + p * (MAXV[i] - MINV[i]))
+        return result
+
+
     def predict_pose(self, push):
         push_vec = normalize_push(push)
-        x = self.x_model.predict([push_vec])[0]
-        y = self.y_model.predict([push_vec])[0]
-        yaw = self.yaw_model.predict([push_vec])[0]
-        return create_pose(x, y, yaw-0.5)
+        if self.use_keras:
+            with self.graph.as_default():
+                with self.session.as_default():
+                    prediction = self.model.predict(np.array([push_vec]))[0]
+                    prediction = self.normalize_prediction(prediction) 
+                    x = prediction[0]
+                    y = prediction[1]
+                    yaw = prediction[2]
+                    print prediction
+        else:
+            x = self.x_model.predict([push_vec])[0]
+            y = self.y_model.predict([push_vec])[0]
+            yaw = self.yaw_model.predict([push_vec])[0]-0.5
+            print x, y, yaw
+        return create_pose(x, y, yaw)
 
 ############### main
 if __name__=="__main__":

@@ -59,7 +59,7 @@ def predict_push(req):
         push = ch.Push()
         push.approach = get_normalized_approach_from_box(c[0])
         push.angle = c[1] - 0.5
-        push.distance = c[2] * 0.03
+        push.distance = 0.005 + c[2] * 0.025
 
         res.next_pose = push_predictor.predict_pose(push)
         res.success = True
@@ -71,7 +71,7 @@ def predict_push(req):
 
 def prediction_server():
     global push_predictor
-    push_predictor = PushPredictor()
+    push_predictor = PushPredictor(True)
     rospy.init_node('prediction_node');
     s = rospy.Service('predict_push_service', PredictPush, predict_push)
     print "Ready to predict pushes"
