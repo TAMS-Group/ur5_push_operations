@@ -199,17 +199,20 @@ class PushStatePropagator : public oc::StatePropagator
         {
             bool success = true;
 
-            const auto *se2state = start->as<ob::SE2StateSpace::StateType>();
-            const double* pos = se2state->as<ob::RealVectorStateSpace::StateType>(0)->values;
-            const double yaw = se2state->as<ob::SO2StateSpace::StateType>(1)->value;
             const double* ctrl = control->as<oc::RealVectorControlSpace::ControlType>()->values;
+
+	    // extract start state
+            const auto *se2state = start->as<ob::SE2StateSpace::StateType>();
+	    const double x = se2state->getX();
+	    const double y = se2state->getY();
+	    const double yaw = se2state->getYaw();
 
             tams_ur5_push_execution::PredictPush msg;
             msg.request.control.push_back(ctrl[0]);
             msg.request.control.push_back(ctrl[1]);
             msg.request.control.push_back(ctrl[2]);
 
-            // predict push control
+            // predict push control effect
             predictor_->call(msg);
 
             if(msg.response.success) {
@@ -220,7 +223,7 @@ class PushStatePropagator : public oc::StatePropagator
                 double next_yaw = next_q.toRotationMatrix().eulerAngles(0,1,2)[2];
 
                 // create new state
-                Eigen::Affine2d next_pos = Eigen::Translation2d(pos[0], pos[1]) 
+                Eigen::Affine2d next_pos = Eigen::Translation2d(x, y) 
                     * Eigen::Rotation2Dd(yaw) * Eigen::Translation2d(np.position.x, np.position.y);
 
                 // set result state
@@ -231,7 +234,7 @@ class PushStatePropagator : public oc::StatePropagator
 
             } else {
                 ROS_ERROR_STREAM("Predict Push service call failed!");
-                result->as<ob::SE2StateSpace::StateType>()->setXY(pos[0], pos[1]);
+                result->as<ob::SE2StateSpace::StateType>()->setXY(x,y);
                 result->as<ob::SE2StateSpace::StateType>()->setYaw(yaw);
                 success = false;
             }
