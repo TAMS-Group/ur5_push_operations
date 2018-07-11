@@ -148,8 +148,8 @@ def call_push_plan_action(object_id, start_pose, goal_pose):
 
 
 def reset_markers(active=True):
-    global start_pose_is_interactive
-    if start_pose_is_interactive:
+    global interactive_start_state
+    if interactive_start_state:
         makePlanarIntMarker( START, active)
 
     makePlanarIntMarker( GOAL, active)
@@ -173,12 +173,12 @@ def get_object_pose(object_frame, reference_frame):
 # Callbacks
 
 def onMove( feedback ):
-    global highlight_solution, start_pose_is_interactive
+    global highlight_solution, interactive_start_state
     event = feedback.event_type
     name = feedback.marker_name
 
     if event == feedback.MOUSE_UP:
-        if(name == GOAL or ( start_pose_is_interactive and name == START) ):
+        if(name == GOAL or ( interactive_start_state and name == START) ):
             poses[name] = feedback.pose
 
     if event == feedback.MOUSE_DOWN:
@@ -190,12 +190,12 @@ def onMove( feedback ):
 
 
 def onPlan( feedback ):
-    global highlight_solution, start_pose_is_interactive
+    global highlight_solution, interactive_start_state
     print "plan"
 
     # set start pose
     start_pose = poses[START]
-    if not start_pose_is_interactive:
+    if not interactive_start_state:
         pose = get_object_pose(object_frame, reference_frame)
         if pose is not None:
             start_pose = pose
@@ -237,17 +237,17 @@ def onExecute( feedback ):
         client.wait_for_result()
 
 def init_interaction_server():
-    global planner_client, highlight_solution, start_pose_is_interactive
+    global planner_client, highlight_solution, interactive_start_state
 
     highlight_solution = False
     menu_handler.insert( "Plan", callback=onPlan )
     menu_handler.insert( "Reset", callback=onReset )
     menu_handler.insert( "Execute", callback=onExecute )
 
-    start_pose_is_interactive = rospy.get_param('start_pose_is_interactive', False)
+    interactive_start_state = rospy.get_param('~interactive_start_state', False)
 
     # set goal pose to object pose on start
-    if not start_pose_is_interactive:
+    if not interactive_start_state:
         pose = get_object_pose(object_frame, reference_frame)
         if pose is not None:
             poses[GOAL] = pose
