@@ -18,6 +18,15 @@ def transform_pose(base, pose):
     tp = pose_to_matrix(pose)
     return matrix_to_pose(np.dot(tb, tp))
 
+def interpolate_poses(p1, p2):
+    p3 = Pose()
+    p3.position.x = 0.5 * (p1.position.x + p2.position.x)
+    p3.position.y = 0.5 * (p1.position.y + p2.position.y)
+    p3.position.z = 0.5 * (p1.position.z + p2.position.z)
+    p3.orientation = quat_slerp(p1.orientation, p2.orientation)
+    return p3
+
+
 def get_diff_pose_old(p1, p2):
     pose = Pose()
     pose.position.x = p2.position.x - p1.position.x
@@ -74,3 +83,20 @@ def quat_from_yaw(yaw):
 def get_yaw(pose):
     q = quat_geom_to_py(pose.orientation)
     return q.angle * q.axis[2]
+
+def get_line(p1, p2):
+    A = (p1.y - p2.y)
+    B = (p2.x - p1.x)
+    C = (p1.x*p2.y - p2.x*p1.y)
+    return A, B, -C
+
+def intersection(L1, L2):
+    D  = L1[0] * L2[1] - L1[1] * L2[0]
+    Dx = L1[2] * L2[1] - L1[1] * L2[2]
+    Dy = L1[0] * L2[2] - L1[2] * L2[0]
+    if D != 0:
+        x = Dx / D
+        y = Dy / D
+        return x,y
+    else:
+        return False

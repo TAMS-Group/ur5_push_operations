@@ -184,11 +184,10 @@ class PushPredictor(object):
             with self.graph.as_default():
                 with self.session.as_default():
                     prediction = self.model.predict(np.array([push_vec]))[0]
-                    prediction = self.normalize_prediction(prediction) 
+                    prediction = self.normalize_prediction(prediction)
                     x = prediction[0]
                     y = prediction[1]
                     yaw = prediction[2]
-                    print prediction
         else:
             x = self.x_model.predict([push_vec])[0]
             y = self.y_model.predict([push_vec])[0]
