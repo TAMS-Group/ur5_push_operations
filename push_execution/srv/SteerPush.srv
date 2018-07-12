@@ -1,0 +1,6 @@
+geometry_msgs/Pose start
+geometry_msgs/Pose goal
+---
+float64[] control
+float64 duration
+bool success

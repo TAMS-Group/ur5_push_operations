@@ -42,6 +42,7 @@ add_service_files(
 	PusherMovement.srv
 	SamplePredictivePush.srv
 	PredictPush.srv
+	SteerPush.srv
 )
 
 generate_messages(
