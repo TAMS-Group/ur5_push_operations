@@ -62,8 +62,8 @@ def control_to_push(c):
     push.approach = get_normalized_approach_from_box(c[0])
     push.angle = c[1] - 0.5
     #push.distance = 0.005 + c[2] * 0.025
-    #push.distance = 0.01
-    push.distance = c[2] * 0.05
+    push.distance = 0.01
+    #push.distance = c[2] * 0.05
     return push
 
 def push_direction_valid(direction, threshold = 0.5):
@@ -138,7 +138,7 @@ def predict_push(req):
     res.success = False
 
     # get controls
-    #print "received", req
+    print "received", req
 
     if len(req.control) == 3:
 
@@ -396,7 +396,7 @@ def prediction_server():
     rospy.init_node('prediction_node');
     push_service = rospy.Service('predict_push_service', PredictPush, predict_push)
     #steer_service = rospy.Service('steer_push_service', SteerPush, steer_push)
-    steer_service = rospy.Service('steer_push_service', SteerPush, simple_steer)
+    steer_service = rospy.Service('steer_push_service', SteerPush, steer_with_cor)
     print "Ready to predict pushes"
     rospy.spin()
 

@@ -10,5 +10,24 @@
   <license>BSD</license>
 
 
+
+  <build_depend>roscpp</build_depend>
+  <build_depend>eigen_conversions</build_depend>
+
+  <exec_depend>roscpp</exec_depend>
+  <exec_depend>eigen_conversions</exec_depend>
+
+
   <buildtool_depend>catkin</buildtool_depend>
 </package>
+
+
+
+
+
+
+
+
+
+
+
