@@ -102,10 +102,13 @@ namespace ur5_pusher
 	 * Sample random contact point from box dimensions
 	 */
 	geometry_msgs::Pose PushApproachSampler::sampleRandomPoseFromBox(double dim_x, double dim_y, double dim_z) {
+		std::uniform_real_distribution<> dis(0.0, 1.0);
+        return getPoseFromBoxBorder(dis(gen), dim_x, dim_y, dim_z);
+    }
+
+	geometry_msgs::Pose PushApproachSampler::getPoseFromBoxBorder(double p, double dim_x, double dim_y, double dim_z) {
+        p = p * 2 * (dim_x + dim_y);
 		geometry_msgs::Pose pose;
-		// Pick random value in range of perimeter
-		std::uniform_real_distribution<> dis(0.0, 2 * (dim_x + dim_y));
-		double p = dis(gen);
 		// Match value with edge and create corresponding pose
 		if(p <= dim_x) {
 			pose.position.x = p;
