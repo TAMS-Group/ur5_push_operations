@@ -11,6 +11,9 @@
 
 class NeuralNetwork {
 
+	private:
+
+
     Eigen::VectorXf yamlToVector(const YAML::Node &yaml) {
         Eigen::VectorXf vector;
         vector.resize(yaml.size());
@@ -48,9 +51,12 @@ class NeuralNetwork {
     std::unordered_map<std::string, std::shared_ptr<Layer>> layerMap;
     std::vector<std::shared_ptr<Layer>> layerList;
     Eigen::VectorXf _inputCenter, _inputScale, _outputCenter, _outputScale;
+    Eigen::VectorXf _inputMin, _inputMax, _outputMin, _outputMax;
     std::shared_ptr<Layer> inputLayer, outputLayer;
+    bool has_normalization_=false;
+    std::string normalization_type;
 
-public:
+    public:
     const Eigen::VectorXf &inputCenter() { return _inputCenter; }
     const Eigen::VectorXf &inputScale() { return _inputScale; }
     const Eigen::VectorXf &outputCenter() { return _outputCenter; }
@@ -59,18 +65,49 @@ public:
     void load(const std::string &filename) {
         ROS_INFO("loading network %s", filename.c_str());
         YAML::Node yaml = YAML::LoadFile(filename);
-        size_t layerCount = yaml["layers"]["layers"].size();
-        //_inputCenter = yamlToVector(yaml["normalization"]["input"]["center"]);
-        //_inputScale = yamlToVector(yaml["normalization"]["input"]["scale"]);
-        //_outputCenter = yamlToVector(yaml["normalization"]["output"]["center"]);
-        //_outputScale = yamlToVector(yaml["normalization"]["output"]["scale"]);
+
+        if(yaml["normalization"]){
+            has_normalization_ = true;
+            normalization_type = yaml["normalization"]["type"].as<std::string>();
+            if(normalization_type == "min_max") {
+                _inputMin = yamlToVector(yaml["normalization"]["min_in"]);
+                _inputMax = yamlToVector(yaml["normalization"]["max_in"]);
+                _outputMin = yamlToVector(yaml["normalization"]["min_out"]);
+                _outputMax = yamlToVector(yaml["normalization"]["max_out"]);
+            } else if (normalization_type == "z_score") {
+                _inputCenter = yamlToVector(yaml["normalization"]["input"]["center"]);
+                _inputScale = yamlToVector(yaml["normalization"]["input"]["scale"]);
+                _outputCenter = yamlToVector(yaml["normalization"]["output"]["center"]);
+                _outputScale = yamlToVector(yaml["normalization"]["output"]["scale"]);
+            }
+        }
+
+        YAML::Node yamlLayers = yaml["layers"];
+        bool sequentialModel = true;
+        std::shared_ptr<Layer> lastLayer;
+        if(yamlLayers["layers"]) {
+            yamlLayers = yamlLayers["layers"];
+            sequentialModel = false;
+        }
+        size_t layerCount = yamlLayers.size();
         for(size_t layerIndex = 0; layerIndex < layerCount; layerIndex++) {
-            YAML::Node yamlLayer = yaml["layers"]["layers"][layerIndex];
+            YAML::Node yamlLayer = yamlLayers[layerIndex];
             std::string layerType = yamlLayer["class_name"].as<std::string>();
             std::shared_ptr<Layer> layer;
-            if(layerType == "InputLayer") {
+            if(sequentialModel && layerIndex == 0) {
                 struct Input : Layer {};
                 layer = std::make_shared<Input>();
+                layer->name = "input_layer";
+                layerMap[layer->name] = layer;
+                layerList.push_back(layer);
+                lastLayer = layer;
+            }
+            else if(layerType == "InputLayer") {
+                struct Input : Layer {};
+                layer = std::make_shared<Input>();
+            }
+            if(layerType == "Dropout") {
+                continue;
             }
             if(layerType == "Dense") {
                 enum class Activation {
@@ -87,16 +124,16 @@ public:
                             output += weights[1];
                         }
                         switch(activation) {
-                        case Activation::relu:
-                            for(size_t i = 0; i < output.size(); i++) {
-                                output[i] = std::max(0.0f, output[i]);
-                            }
-                            break;
-                        case Activation::sigmoid:
-                            for(size_t i = 0; i < output.size(); i++) {
-                                output[i] = 1.0 / (1.0 + std::exp(-output[i]));
-                            }
-                            break;
+                            case Activation::relu:
+                                for(size_t i = 0; i < output.size(); i++) {
+                                    output[i] = std::max(0.0f, output[i]);
+                                }
+                                break;
+                            case Activation::sigmoid:
+                                for(size_t i = 0; i < output.size(); i++) {
+                                    output[i] = 1.0 / (1.0 + std::exp(-output[i]));
+                                }
+                                break;
                         }
                     }
                 };
@@ -153,33 +190,53 @@ public:
                 layerWeights.push_back(weights.transpose());
             }
             layer->weights = layerWeights;
-            for(size_t i = 0; i < yamlLayer["inbound_nodes"][0].size(); i++) {
-                layer->inputNames.push_back(yamlLayer["inbound_nodes"][0][i][0].as<std::string>());
+
+            if(sequentialModel) {
+                layer->name = yamlLayer["config"]["name"].as<std::string>();
+                layer->inputNames.push_back(lastLayer->name);
+            } else {
+                layer->name = yamlLayer["name"].as<std::string>();
+                for(size_t i = 0; i < yamlLayer["inbound_nodes"][0].size(); i++) {
+                    layer->inputNames.push_back(yamlLayer["inbound_nodes"][0][i][0].as<std::string>());
+                }
             }
-            layer->name = yamlLayer["name"].as<std::string>();
             layerMap[layer->name] = layer;
             layerList.push_back(layer);
+            lastLayer = layer;
         }
+
         for(auto layer : layerList) {
             for(auto n : layer->inputNames) {
                 layer->inputLayers.push_back(layerMap[n]);
             }
         }
-        for(auto layer : layerList) {
-            ROS_INFO("%s", layer->name.c_str());
-            for(auto n : layer->inputNames) {
-                ROS_INFO("  input %s", n.c_str());
-            }
+
+        if(sequentialModel) {
+            inputLayer = layerMap[layerList[0]->name];
+            outputLayer = layerMap[layerList[layerList.size() - 1]->name];
+        } else {
+            inputLayer = layerMap[yamlLayers["input_layers"][0][0].as<std::string>()];
+            outputLayer = layerMap[yamlLayers["output_layers"][0][0].as<std::string>()];
         }
-        inputLayer = layerMap[yaml["layers"]["input_layers"][0][0].as<std::string>()];
-        outputLayer = layerMap[yaml["layers"]["output_layers"][0][0].as<std::string>()];
         ROS_INFO("ready");
+    }
+
+    bool hasNormalization() {
+        return has_normalization_;
     }
 
     void run(const Eigen::VectorXf &input, Eigen::VectorXf &output) {
         inputLayer->output = input;
-        //inputLayer->output = inputLayer->output - _inputCenter;
-        //inputLayer->output = inputLayer->output.cwiseProduct(_inputScale.cwiseInverse());
+        if(has_normalization_){
+            if(normalization_type == "min_max") {
+                inputLayer->output = inputLayer->output - _inputMin;
+                inputLayer->output = inputLayer->output.cwiseQuotient(_inputMax - _inputMin);
+            } else if (normalization_type == "z_score") {
+                inputLayer->output = inputLayer->output - _inputCenter;
+                inputLayer->output = inputLayer->output.cwiseProduct(_inputScale.cwiseInverse());
+            }
+        }
+
         for(auto &layer : layerList) {
             layer->inputs.resize(layer->inputLayers.size());
             for(size_t i = 0; i < layer->inputLayers.size(); i++) {
@@ -188,7 +245,16 @@ public:
             layer->run();
         }
         output = outputLayer->output;
-        //output = output.cwiseProduct(_outputScale);
-        //output = output + _outputCenter;
+
+        if(has_normalization_){
+            if(normalization_type == "min_max") {
+                output = output.cwiseProduct(_outputMax - _outputMin);
+                output = _outputMin + output;
+            } else if (normalization_type == "z_score") {
+                output = output.cwiseProduct(_outputScale);
+                output = output + _outputCenter;
+            }
+        }
+
     }
 };
