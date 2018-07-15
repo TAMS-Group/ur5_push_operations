@@ -11,6 +11,7 @@ find_package(catkin REQUIRED COMPONENTS
     tams_ur5_push_execution
     geometry_msgs
     eigen_conversions
+    push_prediction
     message_generation
     moveit_msgs
     moveit_core
@@ -48,4 +49,4 @@ include_directories(
 
 add_executable(push_planner_node src/push_planner_node.cpp)
 add_dependencies(push_planner_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
-target_link_libraries(push_planner_node ${catkin_LIBRARIES} ${OMPL_LIBRARIES})
+target_link_libraries(push_planner_node ${catkin_LIBRARIES} ${OMPL_LIBRARIES} push_approach_sampler push_predictor)

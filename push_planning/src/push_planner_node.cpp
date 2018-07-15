@@ -61,6 +61,7 @@
 #include <tf/tf.h>
 #include <actionlib/server/simple_action_server.h>
 #include <eigen_conversions/eigen_msg.h>
+#include <tams_ur5_push_execution/Push.h>
 #include <tams_ur5_push_execution/PredictPush.h>
 #include <tams_ur5_push_execution/SteerPush.h>
 #include <tams_ur5_push_execution/PushTrajectory.h>
@@ -71,6 +72,8 @@
 #include <moveit_msgs/AttachedCollisionObject.h>
 #include <geometry_msgs/Quaternion.h>
 #include <push_planning/PushPlanAction.h>
+#include <push_prediction/push_predictor.h>
+#include <ur5_pusher/push_approach_sampler.h>
 
 #include <moveit/planning_scene/planning_scene.h>
 #include <moveit/planning_scene_interface/planning_scene_interface.h>
@@ -117,9 +120,9 @@ void pathControlToPushTrajectoryMsg(const ompl::control::PathControl& solution, 
         tf::quaternionEigenToMsg(q, pose.orientation);
         traj_msg.poses.push_back(pose);
 
-	// TODO: implement control->push conversion
+        // TODO: implement control->push conversion
         //const double* ctrl = solution.getControl(i)->as<oc::RealVectorControlSpace::ControlType>()->values;
-	//tams_ur5_push_execution::PushApproach push;
+        //tams_ur5_push_execution::PushApproach push;
         //traj_msg.pushes.push_back(push);
     }
 }
@@ -181,11 +184,11 @@ moveit_msgs::AttachedCollisionObject getAttachedCollisionObject(const double& x,
 }
 
 void convertStateToPose(const ob::State *state, geometry_msgs::Pose& pose) {
-	const auto *se2state = state->as<ob::SE2StateSpace::StateType>();
-	pose.position.x = se2state->getX();
-	pose.position.y = se2state->getY();
-	pose.position.z = 0.0;
-	tf::quaternionTFToMsg(tf::createQuaternionFromYaw(se2state->getYaw()), pose.orientation);
+    const auto *se2state = state->as<ob::SE2StateSpace::StateType>();
+    pose.position.x = se2state->getX();
+    pose.position.y = se2state->getY();
+    pose.position.z = 0.0;
+    tf::quaternionTFToMsg(tf::createQuaternionFromYaw(se2state->getYaw()), pose.orientation);
 }
 
 class PushStateValidityChecker : public ob::StateValidityChecker
@@ -232,11 +235,11 @@ class PushStateValidityChecker : public ob::StateValidityChecker
             //const auto *se2state = state->as<ob::SE2StateSpace::StateType>();
 
             geometry_msgs::Pose pose;
-	    convertStateToPose(state, pose);
+            convertStateToPose(state, pose);
             //pose.position.x = se2state->getX();
             //pose.position.y = se2state->getY();
             pose.position.z = 0.5 * dimZ + 0.001;
-	    //tf::quaternionTFToMsg(tf::createQuaternionFromYaw(se2state->getYaw()), pose.orientation);
+            //tf::quaternionTFToMsg(tf::createQuaternionFromYaw(se2state->getYaw()), pose.orientation);
 
             obj.object.primitive_poses.push_back(pose);
             scene_->processAttachedCollisionObjectMsg(obj);
@@ -250,94 +253,242 @@ class PushStatePropagator : public oc::StatePropagator
     private:
         ros::ServiceClient * const steer_predictor_;
         ros::ServiceClient * const push_predictor_;
-	const bool canSteer_;
+        push_prediction::PushPredictor* const predictor_;
+        ur5_pusher::PushApproachSampler* const push_sampler_;
+        const bool canSteer_;
+
+        const double dimX = 0.162;
+        const double dimY = 0.23;
+        const double dimZ = 0.112;
 
     public:
 
         PushStatePropagator(const oc::SpaceInformationPtr &si, ros::ServiceClient& push_predictor, ros::ServiceClient& steer_predictor, bool canSteer=false) 
-		: oc::StatePropagator(si), push_predictor_(&push_predictor), steer_predictor_(&steer_predictor), canSteer_(canSteer)
-    {
-    }
-
-        void propagate(const ob::State *start, const oc::Control *control, const double duration, ob::State *result) const override
+            : oc::StatePropagator(si), push_predictor_(&push_predictor), steer_predictor_(&steer_predictor), canSteer_(canSteer), predictor_(new push_prediction::PushPredictor()), push_sampler_(new ur5_pusher::PushApproachSampler())
         {
-            bool success = true;
-
-            const double* ctrl = control->as<oc::RealVectorControlSpace::ControlType>()->values;
-
-            // extract start state
-            const auto *se2state = start->as<ob::SE2StateSpace::StateType>();
-            const double x = se2state->getX();
-            const double y = se2state->getY();
-            const double yaw = se2state->getYaw();
-
-
-            tams_ur5_push_execution::PredictPush msg;
-            msg.request.control.push_back(ctrl[0]);
-            msg.request.control.push_back(ctrl[1]);
-            msg.request.control.push_back(ctrl[2]);
-
-            // predict push control effect
-            push_predictor_->call(msg);
-
-            if (msg.response.success) {
-
-                geometry_msgs::Pose np = msg.response.next_pose;
-                geometry_msgs::Quaternion q = np.orientation;
-                Eigen::Quaterniond next_q(q.w, q.x, q.y, q.z);
-                double next_yaw = next_q.toRotationMatrix().eulerAngles(0,1,2)[2];
-
-                // create new state
-                Eigen::Affine2d next_pos = Eigen::Translation2d(x, y) 
-                    * Eigen::Rotation2Dd(yaw) * Eigen::Translation2d(np.position.x, np.position.y);
-
-                // set result state
-                result->as<ob::SE2StateSpace::StateType>()->setXY(
-                        next_pos.translation().x(),
-                        next_pos.translation().y());
-		result->as<ob::SE2StateSpace::StateType>()->setYaw( std::fmod(yaw + next_yaw + M_PI , 2 * M_PI) - M_PI);
-
-            } else {
-                ROS_ERROR_STREAM("Predict Push service call failed!");
-                result->as<ob::SE2StateSpace::StateType>()->setXY(x,y);
-                result->as<ob::SE2StateSpace::StateType>()->setYaw(yaw);
-                success = false;
-            }
+            predictor_->setReuseSolutions(true);
         }
 
-	bool canPropagateBackward()
-	{
-		return false;
-	}
+        /*
+           void propagate(const ob::State *start, const oc::Control *control, const double duration, ob::State *result) const override
+           {
+           bool success = true;
 
-	bool canSteer() const override
-	{
-		return canSteer_;
-	}
+           const double* ctrl = control->as<oc::RealVectorControlSpace::ControlType>()->values;
 
-	/*
-	 * Computes control and duration for a given start/goal state pair.
-	 * The SteerPush service samples random controls and selects the one with the minimal expected
-	 * goal distance. The distance is computed as defined by SE2StateSpace, as a weighted sum of arclength (0.5)
-	 * and cartesian distance (1.0).
-	 */
-	bool steer(const ob::State *start, const ob::State *to, oc::Control *control, double& duration) const override
-	{
-		tams_ur5_push_execution::SteerPush msg;
-		convertStateToPose(start, msg.request.start);
-		convertStateToPose(to, msg.request.goal);
-		steer_predictor_->call(msg);
-		duration = msg.response.duration;
-		auto *rcontrol = control->as<oc::RealVectorControlSpace::ControlType>();
-		if (msg.response.control.size() == si_->getControlSpace()->getDimension()) {
-			for(int i = 0; i < msg.response.control.size(); i++) {
-				rcontrol->values[i] = msg.response.control[i];
-			}
-		}
-		return msg.response.success;
-	}
+        // extract start state
+        const auto *se2state = start->as<ob::SE2StateSpace::StateType>();
+        const double x = se2state->getX();
+        const double y = se2state->getY();
+        const double yaw = se2state->getYaw();
+
+
+        tams_ur5_push_execution::PredictPush msg;
+        msg.request.control.push_back(ctrl[0]);
+        msg.request.control.push_back(ctrl[1]);
+        msg.request.control.push_back(ctrl[2]);
+
+        // predict push control effect
+        push_predictor_->call(msg);
+
+        if (msg.response.success) {
+
+        geometry_msgs::Pose np = msg.response.next_pose;
+        geometry_msgs::Quaternion q = np.orientation;
+        Eigen::Quaterniond next_q(q.w, q.x, q.y, q.z);
+        double next_yaw = next_q.toRotationMatrix().eulerAngles(0,1,2)[2];
+
+// create new state
+Eigen::Affine2d next_pos = Eigen::Translation2d(x, y) 
+         * Eigen::Rotation2Dd(yaw) * Eigen::Translation2d(np.position.x, np.position.y);
+
+// set result state
+result->as<ob::SE2StateSpace::StateType>()->setXY(
+next_pos.translation().x(),
+next_pos.translation().y());
+result->as<ob::SE2StateSpace::StateType>()->setYaw( std::fmod(yaw + next_yaw + M_PI , 2 * M_PI) - M_PI);
+
+} else {
+ROS_ERROR_STREAM("Predict Push service call failed!");
+result->as<ob::SE2StateSpace::StateType>()->setXY(x,y);
+result->as<ob::SE2StateSpace::StateType>()->setYaw(yaw);
+success = false;
+}
+}
+*/
+
+void propagate(const ob::State *start, const oc::Control *control, const double duration, ob::State *result) const override
+{
+    const double* ctrl = control->as<oc::RealVectorControlSpace::ControlType>()->values;
+
+    // extract start state
+    const auto *se2state = start->as<ob::SE2StateSpace::StateType>();
+    const double x = se2state->getX();
+    const double y = se2state->getY();
+    const double yaw = se2state->getYaw();
+
+    tams_ur5_push_execution::Push push;
+    /*
+       push.approach.pose = sampler->
+       push.angle = ctrl[1];
+       push.distance = ctrl[2];
+       */
+    geometry_msgs::Pose pose = push_sampler_->getPoseFromBoxBorder(ctrl[0], dimX, dimY, dimZ);
+    push.approach.point = pose.position;
+    push.approach.normal = pose.orientation;
+    push.approach.angle = ctrl[1] - 0.5;
+    push.distance = ctrl[2] * 0.05;
+
+    // predict push control effect
+    predictor_->predict(push, pose);
+
+    tf::getYaw(pose.orientation);
+
+    geometry_msgs::Quaternion q = pose.orientation;
+    Eigen::Quaterniond next_q(q.w, q.x, q.y, q.z);
+    double next_yaw = next_q.toRotationMatrix().eulerAngles(0,1,2)[2];
+
+    // create new state
+    Eigen::Affine2d next_pos = Eigen::Translation2d(x, y) 
+        * Eigen::Rotation2Dd(yaw) * Eigen::Translation2d(pose.position.x, pose.position.y);
+
+    // set result state
+    result->as<ob::SE2StateSpace::StateType>()->setXY(
+            next_pos.translation().x(),
+            next_pos.translation().y());
+    result->as<ob::SE2StateSpace::StateType>()->setYaw( std::fmod(yaw + next_yaw + M_PI , 2 * M_PI) - M_PI);
+}
+
+
+bool canPropagateBackward()
+{
+    return false;
+}
+
+bool canSteer() const override
+{
+    return canSteer_;
+}
+
+/*
+ * Computes control and duration for a given start/goal state pair.
+ * The SteerPush service samples random controls and selects the one with the minimal expected
+ * goal distance. The distance is computed as defined by SE2StateSpace, as a weighted sum of arclength (0.5)
+ * and cartesian distance (1.0).
+ */
+bool steer(const ob::State *start, const ob::State *to, oc::Control *control, double& duration) const override
+{
+    tams_ur5_push_execution::SteerPush msg;
+    convertStateToPose(start, msg.request.start);
+    convertStateToPose(to, msg.request.goal);
+    steer_predictor_->call(msg);
+    duration = msg.response.duration;
+    auto *rcontrol = control->as<oc::RealVectorControlSpace::ControlType>();
+    if (msg.response.control.size() == si_->getControlSpace()->getDimension()) {
+        for(int i = 0; i < msg.response.control.size(); i++) {
+            rcontrol->values[i] = msg.response.control[i];
+        }
+    }
+    return msg.response.success;
+}
 };
 
+
+class PushChainControlSampler : public oc::DirectedControlSampler {
+    private:
+        oc::ControlSamplerPtr cs_;
+        unsigned int numControlSamples_;
+    public:
+        PushChainControlSampler(const oc::SpaceInformation *si, unsigned int k)
+            : oc::DirectedControlSampler(si), cs_(si->allocControlSampler()), numControlSamples_(k)
+        {
+        }
+
+        ~PushChainControlSampler() = default;
+
+        unsigned int getNumControlSamples() const
+        {
+            return numControlSamples_;
+        }
+
+        void setNumControlSamples(unsigned int numSamples)
+        {
+            numControlSamples_ = numSamples;
+        }
+
+        unsigned int sampleTo(oc::Control *control, const ob::State *source,
+                ob::State *dest)
+        {
+            return getBestControl(control, source, dest, nullptr);
+        }
+
+        unsigned int sampleTo(oc::Control *control, const oc::Control *previous,
+                const ob::State *source, ob::State *dest)
+        {
+            return getBestControl(control, source, dest, previous);
+        }
+
+        unsigned int getBestControl(oc::Control *control, const ob::State *source,
+                ob::State *dest, const oc::Control *previous)
+        {
+            double previous_approach;
+            // Sample the first control
+            if (previous != nullptr) {
+                cs_->sampleNext(control, previous, source);
+                previous_approach = previous->as<oc::RealVectorControlSpace::ControlType>()->values[0];
+                if (previous_approach > 0.0)
+                    control->as<oc::RealVectorControlSpace::ControlType>()->values[0] = previous_approach;
+            }
+            else
+                cs_->sample(control, source);
+
+            const unsigned int minDuration = si_->getMinControlDuration();
+            const unsigned int maxDuration = si_->getMaxControlDuration();
+
+            unsigned int steps = cs_->sampleStepCount(minDuration, maxDuration);
+            // Propagate the first control, and find how far it is from the target state
+            ob::State *bestState = si_->allocState();
+            steps = si_->propagateWhileValid(source, control, steps, bestState);
+
+            if (numControlSamples_ > 1)
+            {
+                oc::Control *tempControl = si_->allocControl();
+                ob::State *tempState = si_->allocState();
+                double bestDistance = si_->distance(bestState, dest);
+
+                // Sample k-1 more controls, and save the control that gets closest to target
+                for (unsigned int i = 1; i < numControlSamples_; ++i)
+                {
+                    unsigned int sampleSteps = cs_->sampleStepCount(minDuration, maxDuration);
+                    if (previous != nullptr) {
+                        cs_->sampleNext(tempControl, previous, source);
+                        if (previous_approach > 0.0)
+                            tempControl->as<oc::RealVectorControlSpace::ControlType>()->values[0] = previous_approach;
+                    }
+                    else
+                        cs_->sample(tempControl, source);
+
+                    sampleSteps = si_->propagateWhileValid(source, tempControl, sampleSteps, tempState);
+                    double tempDistance = si_->distance(tempState, dest);
+                    if (tempDistance < bestDistance)
+                    {
+                        si_->copyState(bestState, tempState);
+                        si_->copyControl(control, tempControl);
+                        bestDistance = tempDistance;
+                        steps = sampleSteps;
+                    }
+                }
+
+                si_->freeState(tempState);
+                si_->freeControl(tempControl);
+            }
+
+            si_->copyState(dest, bestState);
+            si_->freeState(bestState);
+
+            return steps;
+        }
+};
 
 
 
@@ -412,16 +563,18 @@ namespace push_planning {
 
                 cspace->setBounds(cbounds);
 
-		// (experimental) set directedcontrolsampler with higher sampling count
-		//oc::SpaceInformationPtr si = std::make_shared<oc::SpaceInformation>(cspace->getStateSpace(), cspace);
-		//si->setDirectedControlSamplerAllocator([](const oc::SpaceInformation* si){ return std::make_shared<oc::SimpleDirectedControlSampler>(si, 50);});
+                // (experimental) set directedcontrolsampler with higher sampling count
+                //oc::SpaceInformationPtr si = std::make_shared<oc::SpaceInformation>(cspace->getStateSpace(), cspace);
+                //si->setDirectedControlSamplerAllocator([](const oc::SpaceInformation* si){ return std::make_shared<oc::SimpleDirectedControlSampler>(si, 50);});
+                //si->setDirectedControlSamplerAllocator([](const oc::SpaceInformation* si){ return std::make_shared<PushChainControlSampler>(si, 10);});
+
                 //oc::SimpleSetup ss(si);
 
-		// define simple setup instance
-		oc::SimpleSetup ss(cspace);
+                // define simple setup instance
+                oc::SimpleSetup ss(cspace);
 
                 //oc::StatePropagatorPtr push_propagator(std::make_shared<PushStatePropagator>(ss.getSpaceInformation(), predictor_));
-		oc::StatePropagatorPtr push_propagator(std::make_shared<PushStatePropagator>(ss.getSpaceInformation(), predictor_, steer_predictor_, false));
+                oc::StatePropagatorPtr push_propagator(std::make_shared<PushStatePropagator>(ss.getSpaceInformation(), predictor_, steer_predictor_, false));
 
                 ss.setStatePropagator(push_propagator);
 
@@ -432,8 +585,8 @@ namespace push_planning {
 
 
                 // load current planning scene
-		moveit::planning_interface::PlanningSceneInterface psi;
-		std::map<std::string, moveit_msgs::CollisionObject> cobjs = psi.getObjects();
+                moveit::planning_interface::PlanningSceneInterface psi;
+                std::map<std::string, moveit_msgs::CollisionObject> cobjs = psi.getObjects();
 
 
                 // apply collision object to planning scene of StateValidityChecker as well
@@ -441,9 +594,9 @@ namespace push_planning {
                 psm.startStateMonitor();
                 psm.waitForCurrentRobotState(ros::Time::now());
                 planning_scene::PlanningScenePtr scene(psm.getPlanningScene());
-		for (auto& cobj : cobjs) {
-			scene->processCollisionObjectMsg(cobj.second);
-		}
+                for (auto& cobj : cobjs) {
+                    scene->processCollisionObjectMsg(cobj.second);
+                }
 
                 ob::StateValidityCheckerPtr checker(std::make_shared<PushStateValidityChecker>(ss.getSpaceInformation(), scene));
                 ss.setStateValidityChecker(checker);
@@ -462,10 +615,10 @@ namespace push_planning {
                 ss.setStartAndGoalStates(start_state, goal_state, 0.05);
 
                 ss.setPlanner(std::make_shared<oc::RRT>(ss.getSpaceInformation()));
-		ss.getPlanner()->as<oc::RRT>()->setGoalBias(0.1);
-		//ss.getPlanner()->as<oc::RRT>()->setGoalBias(0.75);
-		ss.getPlanner()->as<oc::RRT>()->setIntermediateStates(true);
-                ss.getSpaceInformation()->setMinMaxControlDuration(1,10);
+                ss.getPlanner()->as<oc::RRT>()->setGoalBias(0.5);
+                //ss.getPlanner()->as<oc::RRT>()->setGoalBias(0.75);
+                ss.getPlanner()->as<oc::RRT>()->setIntermediateStates(true);
+                ss.getSpaceInformation()->setMinMaxControlDuration(1,100);
                 ss.getSpaceInformation()->setPropagationStepSize(1.0);
                 // attempt to solve the problem within ten seconds of planning time
                 ob::PlannerStatus solved = ss.solve(300.0);
@@ -475,7 +628,7 @@ namespace push_planning {
                     //ss.getSolutionPath().printAsMatrix(std::cout);
                     pathControlToPushTrajectoryMsg(ss.getSolutionPath(), result.trajectory);
 
-                    ompl::base::PlannerData data(ss.getSpaceInformation());
+                    ob::PlannerData data(ss.getSpaceInformation());
                     ss.getPlannerData(data);
                     plannerDataToGraphMsg(data, result.planner_data);
                 }
