@@ -253,8 +253,13 @@ class PushStatePropagator : public oc::StatePropagator
     private:
         ros::ServiceClient * const steer_predictor_;
         ros::ServiceClient * const push_predictor_;
+
+        const oc::SpaceInformationPtr si_;
+        const oc::ControlSamplerPtr cs_;
+
         push_prediction::PushPredictor* const predictor_;
         ur5_pusher::PushApproachSampler* const push_sampler_;
+
         const bool canSteer_;
 
         const double dimX = 0.162;
@@ -264,7 +269,7 @@ class PushStatePropagator : public oc::StatePropagator
     public:
 
         PushStatePropagator(const oc::SpaceInformationPtr &si, ros::ServiceClient& push_predictor, ros::ServiceClient& steer_predictor, bool canSteer=false) 
-            : oc::StatePropagator(si), push_predictor_(&push_predictor), steer_predictor_(&steer_predictor), canSteer_(canSteer), predictor_(new push_prediction::PushPredictor()), push_sampler_(new ur5_pusher::PushApproachSampler())
+            : oc::StatePropagator(si), push_predictor_(&push_predictor), steer_predictor_(&steer_predictor), canSteer_(canSteer), predictor_(new push_prediction::PushPredictor()), push_sampler_(new ur5_pusher::PushApproachSampler()), si_(si), cs_(si->allocControlSampler())
         {
             predictor_->setReuseSolutions(true);
         }
@@ -328,18 +333,10 @@ void propagate(const ob::State *start, const oc::Control *control, const double 
     const double yaw = se2state->getYaw();
 
     tams_ur5_push_execution::Push push;
-    /*
-       push.approach.pose = sampler->
-       push.angle = ctrl[1];
-       push.distance = ctrl[2];
-       */
-    geometry_msgs::Pose pose = push_sampler_->getPoseFromBoxBorder(ctrl[0], dimX, dimY, dimZ);
-    push.approach.point = pose.position;
-    push.approach.normal = pose.orientation;
-    push.approach.angle = ctrl[1] - 0.5;
-    push.distance = ctrl[2] * 0.05;
+    getPushFromControl(control, push);
 
     // predict push control effect
+    geometry_msgs::Pose pose;
     predictor_->predict(push, pose);
 
     tf::getYaw(pose.orientation);
@@ -359,6 +356,86 @@ void propagate(const ob::State *start, const oc::Control *control, const double 
     result->as<ob::SE2StateSpace::StateType>()->setYaw( std::fmod(yaw + next_yaw + M_PI , 2 * M_PI) - M_PI);
 }
 
+void getPushFromControl(const oc::Control *control, tams_ur5_push_execution::Push& push) const
+{
+    const double* ctrl = control->as<oc::RealVectorControlSpace::ControlType>()->values;
+    geometry_msgs::Pose pose = push_sampler_->getPoseFromBoxBorder(ctrl[0], dimX, dimY, dimZ);
+	push.approach.point = pose.position;
+	push.approach.normal = pose.orientation;
+	push.approach.angle = ctrl[1] - 0.5;
+	push.distance = ctrl[2] * 0.05;
+}
+
+void se2StateToEigen(const ob::State *start, Eigen::Affine2d& pose) const
+{
+    // extract start state
+    const auto *se2state = start->as<ob::SE2StateSpace::StateType>();
+    pose.setIdentity();
+    pose.translate(Eigen::Vector2d(se2state->getX(), se2state->getX()));
+    pose.rotate(Eigen::Rotation2Dd(se2state->getYaw()));
+}
+
+double se2Distance(const Eigen::Affine2d& start, const Eigen::Affine2d& goal) const
+{
+    Eigen::Affine2d diff = start.inverse() * goal;
+    return diff.translation().norm() + 0.5 * Eigen::Rotation2Dd(diff.rotation()).angle();
+}
+
+/*
+ * Implementation of steer_1:
+ * Sample random controls (push steps) and propagate as long as the goal distance decreases.
+ * If start + n * push reaches a state that is within goal_threshold, return control and duration as step count.
+ */
+bool steer(const ob::State *start, const ob::State *goal, oc::Control *control, double& duration) const override
+{
+    Eigen::Affine2d start_pose;
+    se2StateToEigen(start, start_pose);
+
+    Eigen::Affine2d goal_pose;
+    se2StateToEigen(goal, goal_pose);
+
+    // temp variables
+    tams_ur5_push_execution::Push push;
+    geometry_msgs::Pose pose;
+
+    const double goal_distance = si_->distance(start, goal);
+    const double goal_threshold = 0.05;
+
+    Eigen::Affine2d next_pose, step;
+
+    for(int i = 0; i < 100; i++) {
+
+        // sample control
+        cs_->sample(control);
+        getPushFromControl(control, push);
+
+        // predict sampled push
+        predictor_->predict(push, pose);
+        step.setIdentity();
+        step.translate(Eigen::Vector2d(pose.position.x, pose.position.y));
+        step.rotate(Eigen::Rotation2Dd(tf::getYaw(pose.orientation)));
+
+        // compute push step
+        next_pose = start_pose * step;
+        double next_distance = se2Distance(next_pose, goal_pose);
+
+        duration = 0.0;
+        double min_distance = goal_distance;
+        while (next_distance < min_distance) {
+            duration = duration + 1.0;
+            min_distance = next_distance;
+            next_pose = next_pose * step;
+            next_distance = se2Distance(next_pose, goal_pose);
+        }
+
+        if(duration > 0.0 && min_distance < goal_threshold) {
+            return true;
+        }
+    }
+    return false;
+}
+
+
 
 bool canPropagateBackward()
 {
@@ -375,7 +452,6 @@ bool canSteer() const override
  * The SteerPush service samples random controls and selects the one with the minimal expected
  * goal distance. The distance is computed as defined by SE2StateSpace, as a weighted sum of arclength (0.5)
  * and cartesian distance (1.0).
- */
 bool steer(const ob::State *start, const ob::State *to, oc::Control *control, double& duration) const override
 {
     tams_ur5_push_execution::SteerPush msg;
@@ -391,6 +467,7 @@ bool steer(const ob::State *start, const ob::State *to, oc::Control *control, do
     }
     return msg.response.success;
 }
+ */
 };
 
 
@@ -574,7 +651,7 @@ namespace push_planning {
                 oc::SimpleSetup ss(cspace);
 
                 //oc::StatePropagatorPtr push_propagator(std::make_shared<PushStatePropagator>(ss.getSpaceInformation(), predictor_));
-                oc::StatePropagatorPtr push_propagator(std::make_shared<PushStatePropagator>(ss.getSpaceInformation(), predictor_, steer_predictor_, false));
+                oc::StatePropagatorPtr push_propagator(std::make_shared<PushStatePropagator>(ss.getSpaceInformation(), predictor_, steer_predictor_, true));
 
                 ss.setStatePropagator(push_propagator);
 
@@ -657,12 +734,14 @@ int main(int argc, char** argv)
         cobj.header.frame_id = "/table_top";
         shape_msgs::SolidPrimitive primitive;
         cobj.operation = cobj.ADD;
-        primitive.type = primitive.CYLINDER;
-        primitive.dimensions.push_back(0.3);
-        primitive.dimensions.push_back(0.04);
+        primitive.type = primitive.BOX;
+        primitive.dimensions.push_back(0.03);
+        primitive.dimensions.push_back(0.4);
+        primitive.dimensions.push_back(0.2);
         cobj.primitives.push_back(primitive);
         geometry_msgs::Pose pose;
-        pose.position.z = 0.15;
+        pose.position.z = 0.101;
+        pose.position.y = -0.2;
         pose.orientation.w = 1.0;
         cobj.primitive_poses.push_back(pose);
         psi.applyCollisionObject(cobj);
