@@ -669,16 +669,15 @@ namespace tams_ur5_push_execution
 
             bool executePush(ExecutePush::Request& req, ExecutePush::Response& res)
             {
-                ROS_ERROR_STREAM("Received push request" << req);
+                ROS_INFO_STREAM("Received push request" << req);
                 res.result = false;
-                //res.success = isPusherAvailable() && push_execution_->pointAtBox(pusher_);
                 if (!service_busy_ && isPusherAvailable()) {
                     service_busy_ = true;
                     id_count_++;
                     push_execution_->reset();
                     res.result = push_execution_->performPush(pusher_, req.push, id_count_, execute_);
+                    service_busy_ = false;
                 }
-                service_busy_ = false;
                 return res.result;
             }
 
