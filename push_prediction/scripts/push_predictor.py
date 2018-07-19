@@ -192,7 +192,6 @@ class PushPredictor(object):
             x = self.x_model.predict([push_vec])[0]
             y = self.y_model.predict([push_vec])[0]
             yaw = self.yaw_model.predict([push_vec])[0]-0.5
-            print x, y, yaw
         return create_pose(x, y, yaw)
 
 ############### main
