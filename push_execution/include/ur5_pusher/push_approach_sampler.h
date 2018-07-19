@@ -51,6 +51,7 @@ class PushApproachSampler
 		void setMarker(const visualization_msgs::Marker& marker);
 		void setReferenceFrame(const std::string& reference_frame);
 		geometry_msgs::Pose getPoseFromBoxBorder(double p, double dim_x, double dim_y, double dim_z);
+		geometry_msgs::Pose sampleConstrainedPoseFromBox(double p, const double &dim_x, const double &dim_y, const double &dim_z);
 
 		bool sampleRandomPush(tams_ur5_push_execution::Push& push);
 		bool sampleRandomPushApproach(tams_ur5_push_execution::PushApproach& approach);

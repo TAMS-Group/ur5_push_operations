@@ -106,6 +106,24 @@ namespace ur5_pusher
         return getPoseFromBoxBorder(dis(gen), dim_x, dim_y, dim_z);
     }
 
+	/**
+	 * Sample random contact point from box dimensions
+	 */
+	geometry_msgs::Pose PushApproachSampler::sampleConstrainedPoseFromBox(double p, const double &dim_x, const double &dim_y, const double &dim_z) {
+		std::uniform_real_distribution<> dis(0.0, 1.0);
+        double r = dis(gen);
+		if(p <= dim_x) {
+            p = r * dim_x;
+		} else if (p <= dim_x + dim_y) {
+            p = dim_x + r * dim_y;
+		} else if (p <= 2 * dim_x + dim_y) {
+            p = dim_x + dim_y + r * dim_x;
+		} else {
+            p = dim_x + dim_y + dim_x + r * dim_y;
+		}
+        return getPoseFromBoxBorder(p, dim_x, dim_y, dim_z);
+    }
+
 	geometry_msgs::Pose PushApproachSampler::getPoseFromBoxBorder(double p, double dim_x, double dim_y, double dim_z) {
         p = p * 2 * (dim_x + dim_y);
 		geometry_msgs::Pose pose;
