@@ -132,13 +132,12 @@ def sample_predictive_push(req):
         #set successful
         res.success = True
 
-
     return res
 	
 
 def predictive_push_sampler_server():
     global push_predictor
-    push_predictor = PushPredictor()
+    push_predictor = PushPredictor(True)
     rospy.init_node('predictive_push_sampler_node');
     s = rospy.Service('predictive_push_sampler', SamplePredictivePush, sample_predictive_push)
     print "Ready to sample pushes"
