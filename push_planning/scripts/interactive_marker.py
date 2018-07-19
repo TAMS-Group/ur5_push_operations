@@ -215,26 +215,32 @@ def onReset( feedback ):
     reset_markers(True)
 
 
-#def onExecute( feedback ):
-#    global last_solution
-#    print "execute"
-#    rospy.wait_for_service("push_execution")
-#    print "found service"
-#    execute_push = rospy.ServiceProxy("push_execution", ExecutePush)
-#    for push in last_solution.trajectory.pushes:
-#        print "execute push", push
-#        resp = execute_push(push)
-#        if not resp.result:
-#            break
-
 def onExecute( feedback ):
     global last_solution
-    client = actionlib.SimpleActionClient("move_object_action", MoveObjectAction)
-    client.wait_for_server()
-    for pose in last_solution.trajectory.poses:
-        goal = MoveObjectGoal(object_id=object_frame, target=pose)
-        client.send_goal(goal)
-        client.wait_for_result()
+    print "execute"
+    rospy.wait_for_service("push_execution")
+    print "found service"
+    execute_push = rospy.ServiceProxy("push_execution", ExecutePush)
+    for push in last_solution.trajectory.pushes:
+        push.approach.frame_id = object_frame
+        print "execute push", push
+        try:
+            resp = execute_push(push)
+            if not resp.result:
+                break
+        except rospy.ServiceException as e:
+            print("Service did not process request: " + str(e))
+            break
+
+
+#def onExecute( feedback ):
+#    global last_solution
+#    client = actionlib.SimpleActionClient("move_object_action", MoveObjectAction)
+#    client.wait_for_server()
+#    for pose in last_solution.trajectory.poses:
+#        goal = MoveObjectGoal(object_id=object_frame, target=pose)
+#        client.send_goal(goal)
+#        client.wait_for_result()
 
 def init_interaction_server():
     global planner_client, highlight_solution, interactive_start_state
