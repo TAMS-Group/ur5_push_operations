@@ -145,6 +145,7 @@ def call_push_plan_action(object_id, start_pose, goal_pose):
 
     ppv.visualize_object_trajectory(result.trajectory)
     ppv.visualize_planner_data(result.planner_data)
+    return result
 
 
 def reset_markers(active=True):
@@ -190,15 +191,11 @@ def onMove( feedback ):
 
 
 def onPlan( feedback ):
-    global highlight_solution, interactive_start_state
+    global highlight_solution
     print "plan"
 
     # set start pose
-    start_pose = poses[START]
-    if not interactive_start_state:
-        pose = get_object_pose(object_frame, reference_frame)
-        if pose is not None:
-            start_pose = pose
+    start_pose = getStartState()
 
     # call action
     call_push_plan_action("object_id", start_pose, poses[GOAL])
@@ -232,6 +229,54 @@ def onExecute( feedback ):
             print("Service did not process request: " + str(e))
             break
 
+def onRunMPC( feedback ):
+    print "run mpc"
+    rospy.wait_for_service("push_execution")
+    print "found service"
+    execute_push = rospy.ServiceProxy("push_execution", ExecutePush)
+    current_pose = getStartPose()
+    failed_attempts = 0
+    while se2Distance(current_pose, goal) > 0.05 and failed_attempts < 10:
+        # set current pose
+        current_pose = getStartPose()
+
+        # call action
+        plan = call_push_plan_action("object_id", current_pose, poses[GOAL])
+        push = plan.trajectory.pushes[0]
+        push.approach.frame_id = object_frame
+
+        # hide markers
+        highlight_solution = True
+        reset_markers(False)
+
+        print "execute push", push
+        try:
+            resp = execute_push(push)
+            if not resp.result:
+                failed_attempts += 1
+                continue
+        except rospy.ServiceException as e:
+            print("Service did not process request: " + str(e))
+            failed_attempts += 1
+            continue
+
+        failed_attempts = 0
+
+def getStartPose():
+    global interactive_start_state
+    start_pose = poses[START]
+    if not interactive_start_state:
+        pose = get_object_pose(object_frame, reference_frame)
+        if pose is not None:
+            start_pose = pose
+    return start_pose
+
+def se2Distance(p1, p2):
+    p_dist = linalg_dist(p1, p2)
+    o_dist = abs(ch.get_yaw(p1) - ch.get_yaw(p2)) % (2 * pi)
+    o_dist = o_dist if o_dist < pi else 2 * pi - o_dist
+    return p_dist + 0.5 * o_dist
+
 
 #def onExecute( feedback ):
 #    global last_solution
@@ -249,6 +294,7 @@ def init_interaction_server():
     menu_handler.insert( "Plan", callback=onPlan )
     menu_handler.insert( "Reset", callback=onReset )
     menu_handler.insert( "Execute", callback=onExecute )
+    menu_handler.insert( "Run MPC", callback=onRunMPC )
 
     interactive_start_state = rospy.get_param('~interactive_start_state', False)
 
@@ -265,7 +311,6 @@ def init_interaction_server():
     ppv.init_publishers()
 
     planner_client = actionlib.SimpleActionClient('/push_plan_action', PushPlanAction)
-
 
 
 if __name__=="__main__":
