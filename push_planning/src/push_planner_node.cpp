@@ -103,7 +103,9 @@ void convertControlToPush(const oc::Control *control, tams_ur5_push_execution::P
 	geometry_msgs::Pose pose = push_sampler_->getPoseFromBoxBorder(ctrl[0], dimX, dimY, dimZ);
 	push.approach.point = pose.position;
 	push.approach.normal = pose.orientation;
-	push.approach.angle = ctrl[1] - 0.5;
+	// restrict angle to +- 45°
+	push.approach.angle = (ctrl[1] - 0.5) * 0.5 * M_PI;
+	//push.approach.angle = ctrl[1] - 0.5;
 	push.distance = ctrl[2] * 0.05;
 }
 
