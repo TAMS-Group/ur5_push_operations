@@ -185,7 +185,7 @@ def onPlan( feedback ):
     print "plan"
 
     # set start pose
-    start_pose = getStartState()
+    start_pose = getStartPose()
 
     # call action
     call_push_plan_action("object_id", start_pose, poses[GOAL])
