@@ -15,7 +15,6 @@ dim_Y = 0.23
 dim_Z = 0.112
 
 
-
 def visualize_object_trajectory(traj_msg):
     global marker_pub, marker_array_pub, visible_markers, visible_marker_arrays
     markers = MarkerArray()
@@ -29,7 +28,7 @@ def visualize_object_trajectory(traj_msg):
     pose = Pose()
     pose.position.z = 0.5*dim_Z
     pose.orientation.w = 1.0
-    points, lines = init_graph_markers(nodes, edges, nodes_id=2, edges_id=3, pose=pose, nodes_color=color, edges_color=color, linewidth=0.003, is_path=True)
+    points, lines = init_graph_markers(nodes, edges, nodes_id=2, edges_id=3, pose=pose, nodes_color=color, edges_color=color, linewidth=0.005, is_path=True)
     marker_pub.publish(points)
     marker_pub.publish(lines)
     visible_markers.append(points)
@@ -37,9 +36,10 @@ def visualize_object_trajectory(traj_msg):
 
     # visualize object path with markers
     # TODO: we might use the existing marker to copy the actual shape instead of using hard coded values
-    for i,pose in enumerate(traj_msg.poses):
+    for i in range(len(traj_msg.poses))[0::10]:
+        pose = traj_msg.poses[i]
         progress = float(i) / len(traj_msg.poses)
-        color = ColorRGBA(progress,0.0,1-progress,0.1)
+        color = ColorRGBA(progress,0.0,1-progress,0.25)
         scale = Vector3(dim_X, dim_Y, dim_Z)
         pose.position.z = 0.5*dim_Z
         markers.markers.append(init_marker(i, Marker.CUBE, scale=scale, pose=pose, color=color))
@@ -53,7 +53,9 @@ def visualize_planner_data(graph_msg):
     pose = Pose()
     pose.position.z = 0.5*dim_Z
     pose.orientation.w = 1.0
+
     points, lines = init_graph_markers(graph_msg.nodes, graph_msg.edges, pose=pose)
+
     marker_pub.publish(points)
     marker_pub.publish(lines)
     visible_markers.append(points)
