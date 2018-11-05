@@ -1,3 +1,5 @@
+#pragma once
+
 #include <ros/package.h>
 #include <tams_ur5_push_execution/Push.h>
 #include <geometry_msgs/Pose.h>
