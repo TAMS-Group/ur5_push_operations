@@ -15,4 +15,6 @@
 		<param name="take_snapshots" value="false"/>
 		<param name="execute" value="true"/>
 	</node>
+
+	<include file="$(find push_planning)/launch/push_planning_demo.launch"/>
 </launch>
