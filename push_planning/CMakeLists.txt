@@ -45,6 +45,7 @@ include_directories(
     ${EIGEN__INCLUDE_DIRS}
     ${OMPL_INCLUDE_DIRS}
     ${catkin_INCLUDE_DIRS}
+    include
     )
 
 add_executable(push_planner_node src/push_planner_node.cpp)
