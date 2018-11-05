@@ -7,7 +7,7 @@
 
    	<param name="move_group/constraint_approximations_path" value="$(find ur5_push_setup)/cadb"/>
 
-	<include file="$(find object_recognition)/launch/object_recognition.launch">
+	<include file="$(find ur5_pushing_object_recognition)/launch/object_recognition.launch">
 		<arg name="demo_mode" value="true"/>
 	</include>
 

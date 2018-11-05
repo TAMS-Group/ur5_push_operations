@@ -3,7 +3,7 @@
 
     <arg name="demo_mode" default="true"/>
 
-    <node pkg="object_recognition" type="object_recognition" name="object_recognition" output="screen">
+    <node pkg="ur5_pushing_object_recognition" type="ur5_pushing_object_recognition" name="ur5_pushing_object_recognition" output="screen">
         <rosparam command="load" file="$(find ur5_push_setup)/config/objects.yaml" />
         <!-- demo mode activates a single fixed transform at <0,0,0> in the (table_top) frame -->
         <param name="demo_mode" value="$(arg demo_mode)"/>

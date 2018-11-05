@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <package>
-  <name>object_recognition</name>
+  <name>ur5_pushing_object_recognition</name>
   <version>0.0.1</version>
   <description>The object_recognition package for push operations</description>
 
