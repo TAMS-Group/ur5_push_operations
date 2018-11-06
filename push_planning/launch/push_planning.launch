@@ -1,6 +1,7 @@
 <launch>
 	<node pkg="push_planning" type="push_planner_node" name="push_planner_node" output="screen">
 		<param name="spawn_collision_object_test" value="false"/>
+    <rosparam command="load" file="$(find push_planning)/config/planning.yaml"/>
 	</node>
 
 	<node pkg="push_planning" type="interactive_marker.py" name="push_planner_interaction" output="screen">

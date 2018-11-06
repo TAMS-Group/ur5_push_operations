@@ -129,9 +129,13 @@ namespace push_planning {
   {
     private:
       ros::NodeHandle nh_;
+      ros::NodeHandle pnh_;
+
 
       actionlib::SimpleActionServer<PushPlanAction> as_;
 
+
+      ExplorationStrategy strategy_ = CHAINED;
 
       // planner setup
       double planning_time_ = 300.0;
@@ -151,23 +155,48 @@ namespace push_planning {
 
       bool can_steer_ = false;
 
-      ExplorationStrategy strategy_ = CHAINED;
-
-
 
     public:
-      PushPlannerActionServer(ros::NodeHandle& nh, const std::string& action_name) :
+      PushPlannerActionServer(ros::NodeHandle& nh, ros::NodeHandle& pnh, const std::string& action) :
         nh_(nh),
-        as_(nh_, action_name, boost::bind(&PushPlannerActionServer::planCB, this, _1), false)
+        pnh_(pnh),
+        as_(nh_, action, boost::bind(&PushPlannerActionServer::planCB, this, _1), false)
     {
+      loadParams();
       as_.start();
     }
 
+      void loadParams() {
+        std::string strategy;
+        pnh_.param<std::string>("planning_strategy", strategy, "");
+        strategy_ = RANDOM;
+        if(strategy == "DIRECTED") strategy_ = DIRECTED;
+        else if(strategy == "STEERED") strategy_ = STEERED;
+        else if(strategy == "CHAINED") strategy_ = CHAINED;
+        else if(strategy != "RANDOM") ROS_WARN("Unknown planning strategy: '%s'", strategy.c_str());
 
-      template <class T>
-        oc::DirectedControlSamplerAllocator getControlSamplerAllocator() {
-          return [&](const oc::SpaceInformation* si){ return std::make_shared<T>(si, control_sampler_iterations_); };
-        }
+        // planner setup
+        pnh_.param("planning_time", planning_time_, 300.0);
+        pnh_.param("goal_accuracy", 0.05);
+        pnh_.param("goal_bias", goal_accuracy_, 0.5);
+        pnh_.param("min_control_duration", min_control_duration_, 1.0);
+        pnh_.param("max_control_duration", max_control_duration_, 1.0);
+        pnh_.param("propagation_step_size", propagation_step_size_, 1.0);
+        pnh_.param("set_intermediate_states", set_intermediate_states_, true);
+
+        // state space
+        pnh_.param("state_space_real_min", state_space_real_min_, -0.3);
+        pnh_.param("state_space_real_max", state_space_real_max_, 0.3);
+
+        // control sampler
+        pnh_.param("control_sampler_iterations", control_sampler_iterations_, 10);
+        can_steer_ = strategy_ == STEERED;
+      }
+
+
+      template <class T> oc::DirectedControlSamplerAllocator getControlSamplerAllocator() {
+        return [&](const oc::SpaceInformation* si){ return std::make_shared<T>(si, control_sampler_iterations_); };
+      }
 
       planning_scene::PlanningScenePtr getPlanningScene(){
         // load current planning scene and look for collision objects
@@ -187,10 +216,8 @@ namespace push_planning {
       void planCB(const PushPlanGoalConstPtr& goal)
       {
 
-        // extract goal request
-        const std::string& object_id = goal->object_id;
-        const geometry_msgs::Pose& start_pose = goal->start_pose;
-        const geometry_msgs::Pose& goal_pose = goal->goal_pose;
+        // extract goal request (not used atm)
+        //const std::string& object_id = goal->object_id;
 
         // construct a SE2 state space 
         // and set the bounds for the R^2 part of SE(2) state space
@@ -207,6 +234,12 @@ namespace push_planning {
         cbounds.setLow(0.0);
         cbounds.setHigh(1.0);
         cspace->setBounds(cbounds);
+
+        // create start and goal states
+        ob::ScopedState<ob::SE2StateSpace> start_state(space);
+        convertPoseToState(goal->start_pose, start_state);
+        ob::ScopedState<ob::SE2StateSpace> goal_state(space);
+        convertPoseToState(goal->goal_pose, goal_state);
 
         // Declare planner setup and space information
         oc::SimpleSetup* setup;
@@ -235,7 +268,6 @@ namespace push_planning {
         }
 
         // set state propagator
-        bool can_steer = strategy_ == STEERED;
         oc::StatePropagatorPtr propagator(std::make_shared<PushStatePropagator>(si, can_steer_));
         setup->setStatePropagator(propagator);
 
@@ -243,14 +275,6 @@ namespace push_planning {
         ob::StateValidityCheckerPtr checker(
             std::make_shared<PushStateValidityChecker>(si, getPlanningScene()));
         setup->setStateValidityChecker(checker);
-
-        // create a start state
-        ob::ScopedState<ob::SE2StateSpace> start_state(space);
-        convertPoseToState(start_pose, start_state);
-
-        // create goal state
-        ob::ScopedState<ob::SE2StateSpace> goal_state(space);
-        convertPoseToState(goal_pose, goal_state);
 
         // configure planner setup
         setup->setStartAndGoalStates(start_state, goal_state, goal_accuracy_);
@@ -291,7 +315,7 @@ int main(int argc, char** argv)
   if(pnh.param<bool>("spawn_collision_object_test", false))
     spawnCollisionObject();
 
-  push_planning::PushPlannerActionServer planner(nh, "/push_plan_action");
+  push_planning::PushPlannerActionServer planner(nh, pnh, "/push_plan_action");
   ros::spin();
   return 0;
 }

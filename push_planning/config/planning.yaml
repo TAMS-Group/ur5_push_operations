@@ -1,0 +1,21 @@
+# planning strategy (RANDOM, STEERED, DIRECTED, CHAINED)
+planning_strategy: CHAINED
+
+# planner setup
+planning_time: 300.0
+goal_accuracy: 0.05
+goal_bias: 0.5
+min_control_duration: 1.0
+max_control_duration: 1.0
+propagation_step_size: 1.0
+set_intermediate_states: true
+
+# state space
+state_space_real_min: -0.3
+state_space_real_max: 0.3
+
+# control sampler
+control_sampler_iterations: 10
+
+# collision object
+#spawn_collision_object: false
