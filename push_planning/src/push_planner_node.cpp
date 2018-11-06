@@ -177,8 +177,8 @@ namespace push_planning {
 
         // planner setup
         pnh_.param("planning_time", planning_time_, 300.0);
-        pnh_.param("goal_accuracy", 0.05);
-        pnh_.param("goal_bias", goal_accuracy_, 0.5);
+        pnh_.param("goal_accuracy", goal_accuracy_, 0.05);
+        pnh_.param("goal_bias", goal_bias_, 0.5);
         pnh_.param("min_control_duration", min_control_duration_, 1.0);
         pnh_.param("max_control_duration", max_control_duration_, 1.0);
         pnh_.param("propagation_step_size", propagation_step_size_, 1.0);

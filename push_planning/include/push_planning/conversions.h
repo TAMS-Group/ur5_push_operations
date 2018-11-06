@@ -59,9 +59,15 @@ const double dimZ = 0.112;
 
 ur5_pusher::PushApproachSampler* push_sampler_;
 
+ur5_pusher::PushApproachSampler* getSampler() {
+  if(push_sampler_==NULL)
+    push_sampler_ = new ur5_pusher::PushApproachSampler;
+  return push_sampler_;
+}
+
 void convertControlToPush(const oc::Control *control, tams_ur5_push_execution::Push& push) {
   const double* ctrl = control->as<oc::RealVectorControlSpace::ControlType>()->values;
-  geometry_msgs::Pose pose = push_sampler_->getPoseFromBoxBorder(ctrl[0], dimX, dimY, dimZ);
+  geometry_msgs::Pose pose = getSampler()->getPoseFromBoxBorder(ctrl[0], dimX, dimY, dimZ);
   push.approach.point = pose.position;
   push.approach.normal = pose.orientation;
   // restrict angle to +- 45°
@@ -76,47 +82,41 @@ void convertPoseToState(const geometry_msgs::Pose& pose, ob::ScopedState<ob::SE2
   state->setYaw(tf::getYaw(pose.orientation));
 }
 
+void convertStateToPoint(const ob::State *state, geometry_msgs::Point& point) {
+  const auto *se2state = state->as<ob::SE2StateSpace::StateType>();
+  point.x = se2state->getX();
+  point.y = se2state->getY();
+  point.z = 0.0;
+}
+
 void convertStateToPose(const ob::State *state, geometry_msgs::Pose& pose) {
   const auto *se2state = state->as<ob::SE2StateSpace::StateType>();
-  pose.position.x = se2state->getX();
-  pose.position.y = se2state->getY();
-  pose.position.z = 0.0;
+  convertStateToPoint(se2state, pose.position);
   tf::quaternionTFToMsg(tf::createQuaternionFromYaw(se2state->getYaw()), pose.orientation);
 }
 
+
 void controlPathToPushTrajectoryMsg(const ompl::control::PathControl& solution, tams_ur5_push_execution::PushTrajectory& traj_msg) {
   traj_msg.steps = solution.getStateCount();
-
-  geometry_msgs::Pose pose;
-  pose.orientation.w = 1.0;
+  traj_msg.poses.resize(traj_msg.steps);
+  traj_msg.pushes.resize(solution.getControlCount());
 
   for(int i = 0; i < traj_msg.steps; i++) {
-    pose.position.x = solution.getState(i)->as<ob::SE2StateSpace::StateType>()->getX();
-    pose.position.y = solution.getState(i)->as<ob::SE2StateSpace::StateType>()->getY();
-    double yaw = solution.getState(i)->as<ob::SE2StateSpace::StateType>()->getYaw();
-    Eigen::Quaterniond q(Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ()));
-    tf::quaternionEigenToMsg(q, pose.orientation);
-    traj_msg.poses.push_back(pose);
+    convertStateToPose(solution.getState(i), traj_msg.poses[i]);
 
-    if (i < solution.getControlCount()) {
-      tams_ur5_push_execution::Push push;
-      convertControlToPush(solution.getControl(i), push);
-      traj_msg.pushes.push_back(push);
-    }
+    if ( i < traj_msg.pushes.size() )
+      convertControlToPush(solution.getControl(i), traj_msg.pushes[i]);
   }
 }
 
 void plannerDataToGraphMsg(const ompl::base::PlannerData& data, graph_msgs::GeometryGraph& graph_msg) {
   graph_msg.header.frame_id = "table_top";
-  geometry_msgs::Pose pose;
-  pose.orientation.w = 1.0;
+  graph_msg.nodes.resize(data.numVertices());
 
-  for(unsigned int i = 0; i < data.numVertices(); i++) {
+  for(size_t i = 0; i < graph_msg.nodes.size(); i++) {
 
     // fill node positions
-    pose.position.x = data.getVertex(i).getState()->as<ob::SE2StateSpace::StateType>()->getX();
-    pose.position.y = data.getVertex(i).getState()->as<ob::SE2StateSpace::StateType>()->getY();
-    graph_msg.nodes.push_back(pose.position);
+    convertStateToPoint(data.getVertex(i).getState(), graph_msg.nodes[i]);
 
     // copy adjacent edges
     graph_msgs::Edges edges;
@@ -125,9 +125,8 @@ void plannerDataToGraphMsg(const ompl::base::PlannerData& data, graph_msgs::Geom
     // copy edge weights
     ompl::base::Cost cost;
     for(unsigned int n : edges.node_ids) {
-      if(data.getEdgeWeight(i,n,&cost)) {
+      if(data.getEdgeWeight(i,n,&cost))
         edges.weights.push_back(cost.value());
-      }
     }
 
     // fill edges
