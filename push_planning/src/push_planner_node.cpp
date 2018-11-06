@@ -85,21 +85,22 @@ namespace oc = ompl::control;
 ros::Publisher traj_pub_, graph_pub_;
 
 
-void publishPushTrajectory(const ompl::control::PathControl& solution)
+void publishPushTrajectory(const ompl::control::PathControl& solution) 
 {
   tams_ur5_push_execution::PushTrajectory traj_msg;
   controlPathToPushTrajectoryMsg(solution, traj_msg);
   traj_pub_.publish(traj_msg);
 }
 
-void publishPlannerData(const ompl::base::PlannerData& data) {
+void publishPlannerData(const ompl::base::PlannerData& data)
+{
   graph_msgs::GeometryGraph graph_msg;
   plannerDataToGraphMsg(data, graph_msg);
   graph_pub_.publish(graph_msg);
 }
 
-
-void spawnCollisionObject() {
+void spawnCollisionObject()
+{
   moveit::planning_interface::PlanningSceneInterface psi;
   moveit_msgs::CollisionObject cobj;
   cobj.id = "collision_object";
@@ -122,6 +123,8 @@ void spawnCollisionObject() {
 
 namespace push_planning {
 
+  enum ExplorationStrategy { RANDOM, DIRECTED, STEERED, CHAINED };
+
   class PushPlannerActionServer
   {
     private:
@@ -129,71 +132,44 @@ namespace push_planning {
 
       actionlib::SimpleActionServer<PushPlanAction> as_;
 
+
+      // planner setup
+      double planning_time_ = 300.0;
+      double goal_accuracy_ = 0.05;
+      double goal_bias_ = 0.5;
+      double min_control_duration_ = 1.0;
+      double max_control_duration_ = 1.0;
+      double propagation_step_size_ = 1.0;
+      bool set_intermediate_states_ = true;
+
+      // state space
+      double state_space_real_min_ = -0.3;
+      double state_space_real_max_ = 0.3;
+
+      // control sampler
+      int control_sampler_iterations_ = 10;
+
+      bool can_steer_ = false;
+
+      ExplorationStrategy strategy_ = CHAINED;
+
+
+
     public:
       PushPlannerActionServer(ros::NodeHandle& nh, const std::string& action_name) :
         nh_(nh),
-        as_(nh_, action_name, boost::bind(&PushPlannerActionServer::executeCB, this, _1), false)
+        as_(nh_, action_name, boost::bind(&PushPlannerActionServer::planCB, this, _1), false)
     {
       as_.start();
     }
 
-      void executeCB(const PushPlanGoalConstPtr &goal)
-      {
-        bool success = true;
 
-        PushPlanResult result;
-        if (plan(goal, result)) {
-          as_.setSucceeded(result);
-        } else
-          as_.setAborted(result);
-      }
-
-      bool plan(const PushPlanGoalConstPtr& goal, PushPlanResult& result)
-      {
-        // extract goal request
-        const std::string& object_id = goal->object_id;
-        const geometry_msgs::Pose& start_pose = goal->start_pose;
-        const geometry_msgs::Pose& goal_pose = goal->goal_pose;
-
-        // construct a SE2 state space 
-        // and set the bounds for the R^2 part of SE(2) state space
-        auto space(std::make_shared<ob::SE2StateSpace>());
-        ob::RealVectorBounds bounds(2);
-        bounds.setLow(-0.3);
-        bounds.setHigh(0.3);
-        space->setBounds(bounds);
-
-        // create a push control vector space (approach, direction, distance)
-        // control vectors are normalized to (0.0,1.0)
-        auto cspace(std::make_shared<oc::RealVectorControlSpace>(space, 3));
-        ob::RealVectorBounds cbounds(3);
-        cbounds.setLow(0.0);
-        cbounds.setHigh(1.0);
-        cspace->setBounds(cbounds);
-
-        // Declare planner setup
-        oc::SimpleSetup* setup;
-        oc::SpaceInformationPtr si;
-
-        if(true) {
-
-          // (experimental) set directedcontrolsampler with higher sampling count
-          si = std::make_shared<oc::SpaceInformation>(cspace->getStateSpace(), cspace);
-          //si->setDirectedControlSamplerAllocator(
-          //  [](const oc::SpaceInformation* si){ return std::make_shared<oc::SimpleDirectedControlSampler>(si, 50); });
-          si->setDirectedControlSamplerAllocator(
-              [](const oc::SpaceInformation* si){ return std::make_shared<ChainedControlSampler>(si, 10); });
-          setup = (new oc::SimpleSetup(si));
-        } else {
-          setup = (new oc::SimpleSetup(cspace));
-          si = setup->getSpaceInformation();
+      template <class T>
+        oc::DirectedControlSamplerAllocator getControlSamplerAllocator() {
+          return [&](const oc::SpaceInformation* si){ return std::make_shared<T>(si, control_sampler_iterations_); };
         }
 
-        bool canSteer = false;
-        // set state propagator
-        oc::StatePropagatorPtr push_propagator(std::make_shared<PushStatePropagator>(si, canSteer));
-        setup->setStatePropagator(push_propagator);
-
+      planning_scene::PlanningScenePtr getPlanningScene(){
         // load current planning scene and look for collision objects
         moveit::planning_interface::PlanningSceneInterface psi;
         std::map<std::string, moveit_msgs::CollisionObject> cobjs = psi.getObjects();
@@ -205,9 +181,67 @@ namespace push_planning {
         planning_scene::PlanningScenePtr scene(psm.getPlanningScene());
         for (auto& cobj : cobjs)
           scene->processCollisionObjectMsg(cobj.second);
+        return scene;
+      }
+
+      void planCB(const PushPlanGoalConstPtr& goal)
+      {
+
+        // extract goal request
+        const std::string& object_id = goal->object_id;
+        const geometry_msgs::Pose& start_pose = goal->start_pose;
+        const geometry_msgs::Pose& goal_pose = goal->goal_pose;
+
+        // construct a SE2 state space 
+        // and set the bounds for the R^2 part of SE(2) state space
+        auto space(std::make_shared<ob::SE2StateSpace>());
+        ob::RealVectorBounds bounds(2);
+        bounds.setLow(state_space_real_min_);
+        bounds.setHigh(state_space_real_max_);
+        space->setBounds(bounds);
+
+        // create a push control vector space (approach, direction, distance)
+        // control vectors are normalized to (0.0,1.0)
+        auto cspace(std::make_shared<oc::RealVectorControlSpace>(space, 3));
+        ob::RealVectorBounds cbounds(3);
+        cbounds.setLow(0.0);
+        cbounds.setHigh(1.0);
+        cspace->setBounds(cbounds);
+
+        // Declare planner setup and space information
+        oc::SimpleSetup* setup;
+        oc::SpaceInformationPtr si;
+
+        // initialize setup and space information
+        if(strategy_ == DIRECTED || strategy_ == CHAINED) {
+          // custom control samplers need to be allocated within the space information
+          // the setup is then initialized with the modified space information
+
+          oc::DirectedControlSamplerAllocator sampler;
+          if(strategy_ == DIRECTED)
+            sampler = getControlSamplerAllocator<oc::SimpleDirectedControlSampler>();
+          if(strategy_ == CHAINED)
+            sampler = getControlSamplerAllocator<ChainedControlSampler>();
+
+          si = std::make_shared<oc::SpaceInformation>(cspace->getStateSpace(), cspace);
+          si->setDirectedControlSamplerAllocator(sampler);
+          setup = (new oc::SimpleSetup(si));
+
+        } else {
+
+          // by default the setup is initialized with the control space
+          setup = (new oc::SimpleSetup(cspace));
+          si = setup->getSpaceInformation();
+        }
+
+        // set state propagator
+        bool can_steer = strategy_ == STEERED;
+        oc::StatePropagatorPtr propagator(std::make_shared<PushStatePropagator>(si, can_steer_));
+        setup->setStatePropagator(propagator);
 
         // initialize StateValidityChecker with updated planning scene
-        ob::StateValidityCheckerPtr checker(std::make_shared<PushStateValidityChecker>(si, scene));
+        ob::StateValidityCheckerPtr checker(
+            std::make_shared<PushStateValidityChecker>(si, getPlanningScene()));
         setup->setStateValidityChecker(checker);
 
         // create a start state
@@ -218,28 +252,30 @@ namespace push_planning {
         ob::ScopedState<ob::SE2StateSpace> goal_state(space);
         convertPoseToState(goal_pose, goal_state);
 
-        // set the start and goal states
-        setup->setStartAndGoalStates(start_state, goal_state, 0.05);
+        // configure planner setup
+        setup->setStartAndGoalStates(start_state, goal_state, goal_accuracy_);
         setup->setPlanner(std::make_shared<oc::RRT>(si));
-        setup->getPlanner()->as<oc::RRT>()->setGoalBias(0.5);
-        setup->getPlanner()->as<oc::RRT>()->setIntermediateStates(true);
-        si->setMinMaxControlDuration(1.0, 1.0);
-        si->setPropagationStepSize(1.0);
+        setup->getPlanner()->as<oc::RRT>()->setGoalBias(goal_bias_);
+        setup->getPlanner()->as<oc::RRT>()->setIntermediateStates(set_intermediate_states_);
+        si->setMinMaxControlDuration(min_control_duration_, max_control_duration_);
+        si->setPropagationStepSize(propagation_step_size_);
 
         // attempt to solve the planning problem
-        if (setup->solve(300.0))
-        {
-          //setup->getSolutionPath().printAsMatrix(std::cout);
-          controlPathToPushTrajectoryMsg(setup->getSolutionPath(), result.trajectory);
+        PushPlanResult result;
+        if (setup->solve(planning_time_)) {
 
+          // return solution
           ob::PlannerData data(si);
           setup->getPlannerData(data);
           plannerDataToGraphMsg(data, result.planner_data);
-          return true;
-        }
-        else {
+          controlPathToPushTrajectoryMsg(setup->getSolutionPath(), result.trajectory);
+          as_.setSucceeded(result);
+
+        } else {
+
+          // return error message
           result.error_message = "No solution found";
-          return false;
+          as_.setAborted(result);
         }
       }
   };
