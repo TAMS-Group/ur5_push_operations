@@ -54,7 +54,6 @@ namespace push_planning {
       const oc::SpaceInformationPtr si_;
       const oc::ControlSamplerPtr cs_;
 
-      ur5_pusher::PushSampler* const push_sampler_;
       push_prediction::PushPredictor* const predictor_;
 
       const bool canSteer_;
@@ -71,8 +70,7 @@ namespace push_planning {
       si_(si),
       cs_(si->allocControlSampler()),
       canSteer_(canSteer),
-      predictor_(new push_prediction::PushPredictor()),
-      push_sampler_(new ur5_pusher::PushSampler())
+      predictor_(new push_prediction::PushPredictor())
     {
       predictor_->setReuseSolutions(true);
     }
@@ -164,7 +162,7 @@ namespace push_planning {
       void getPushFromControl(const oc::Control *control, tams_ur5_push_execution::Push& push) const
       {
         const double* ctrl = control->as<oc::RealVectorControlSpace::ControlType>()->values;
-        geometry_msgs::Pose pose = push_sampler_->getPoseFromBoxBorder(ctrl[0], dimX, dimY, dimZ);
+        geometry_msgs::Pose pose = ur5_pusher::PushSampler::getPoseFromBoxBorder(ctrl[0], dimX, dimY, dimZ);
         push.approach.point = pose.position;
         push.approach.normal = pose.orientation;
         push.approach.angle = ctrl[1] - 0.5;

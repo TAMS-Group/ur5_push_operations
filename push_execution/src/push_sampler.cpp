@@ -1,5 +1,8 @@
 #include <ur5_pusher/push_sampler.h>
 
+std::random_device rd;
+std::mt19937 gen{rd()};
+std::uniform_real_distribution<double> unif_dist_{0.0,1.0};
 namespace ur5_pusher
 {
 
@@ -66,16 +69,14 @@ namespace ur5_pusher
    * Sample random contact point from box dimensions
    */
   geometry_msgs::Pose PushSampler::sampleRandomPoseFromBox(double dim_x, double dim_y, double dim_z) {
-    std::uniform_real_distribution<> dis(0.0, 1.0);
-    return getPoseFromBoxBorder(dis(gen), dim_x, dim_y, dim_z);
+    return getPoseFromBoxBorder(unif_dist_(gen), dim_x, dim_y, dim_z);
   }
 
   /**
    * Sample contact point from box on the same side as push pivot p
    */
   geometry_msgs::Pose PushSampler::sampleConstrainedPoseFromBox(double p, const double &dim_x, const double &dim_y, const double &dim_z) {
-    std::uniform_real_distribution<> dis(0.0, 1.0);
-    double r = dis(gen);
+    double r = unif_dist_(gen);
     if(p <= dim_x) {
       p = r * dim_x;
     } else if (p <= dim_x + dim_y) {

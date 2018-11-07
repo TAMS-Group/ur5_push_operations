@@ -57,17 +57,9 @@ const double dimX = 0.162;
 const double dimY = 0.23;
 const double dimZ = 0.112;
 
-ur5_pusher::PushSampler* push_sampler_;
-
-ur5_pusher::PushSampler* getSampler() {
-  if(push_sampler_==NULL)
-    push_sampler_ = new ur5_pusher::PushSampler;
-  return push_sampler_;
-}
-
 void convertControlToPush(const oc::Control *control, tams_ur5_push_execution::Push& push) {
   const double* ctrl = control->as<oc::RealVectorControlSpace::ControlType>()->values;
-  geometry_msgs::Pose pose = getSampler()->getPoseFromBoxBorder(ctrl[0], dimX, dimY, dimZ);
+  geometry_msgs::Pose pose = ur5_pusher::PushSampler::getPoseFromBoxBorder(ctrl[0], dimX, dimY, dimZ);
   push.approach.point = pose.position;
   push.approach.normal = pose.orientation;
   // restrict angle to +- 45°
