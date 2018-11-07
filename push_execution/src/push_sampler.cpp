@@ -47,13 +47,13 @@ namespace ur5_pusher
     return true;
   }
 
-  bool PushSampler::sampleRandomPush(tams_ur5_push_execution::Push& push)
+  bool PushSampler::sampleRandomPush(tams_ur5_push_execution::Push& push) const
   {
     push.distance = sampleRandomPushDistance();
     return sampleRandomPushApproach(push.approach);
   }
 
-  bool PushSampler::sampleRandomPushApproach(tams_ur5_push_execution::PushApproach& approach)
+  bool PushSampler::sampleRandomPushApproach(tams_ur5_push_execution::PushApproach& approach) const
   {
     if(!object_ready_) return false;
 
