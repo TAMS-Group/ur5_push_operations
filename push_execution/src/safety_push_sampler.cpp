@@ -11,27 +11,25 @@ namespace ur5_pusher
     pnh.param("tip_length", tip_length_, TIP_LENGTH);
   }
 
-  void SafetyPushSampler::setReferenceFrame(const std::string& reference_frame)
-  {
-    reference_frame_ = reference_frame;
-  }
-
   bool SafetyPushSampler::sampleRandomPush(tams_ur5_push_execution::Push& push)
   {
     if(!sampleSafePushApproach(push.approach, attempts_))
       return false;
+
     push.distance = sampleRandomPushDistance();
     adjustContactHeight(push);
     return true;
   }
 
   bool SafetyPushSampler::sampleSafePushApproach(tams_ur5_push_execution::PushApproach& approach, int attempts) {
-    geometry_msgs::PoseStamped object_pose, marker_pose;
-    geometry_msgs::Pose pose;
-    marker_pose.pose = marker_.pose;
-    marker_pose.header.frame_id = marker_.header.frame_id;
+    if(!object_ready_)
+      return false;
 
-    tf_listener_.transformPose(reference_frame_, marker_pose, object_pose);
+    geometry_msgs::PoseStamped object_pose;
+    object_pose.pose = object_pose_;
+    object_pose.header.frame_id = object_frame_;
+
+    tf_listener_.transformPose(reference_frame_, object_pose, object_pose);
 
     // get distance from object to table_top
     tf::Vector3 obj_vec;
@@ -81,7 +79,7 @@ namespace ur5_pusher
 
   void SafetyPushSampler::adjustContactHeight(tams_ur5_push_execution::Push& push)
   {
-    double dim_z = marker_.scale.z;
+    double dim_z = shape_.dimensions[2];
     // Pose height is related to box height and tip length
     // By default the tip aligns with the frame of the box.
     // The tip must be lifted in two mutually exclusive cases:

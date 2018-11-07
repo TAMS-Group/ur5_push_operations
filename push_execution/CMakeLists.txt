@@ -7,63 +7,64 @@ add_compile_options(-std=c++11)
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
-	actionlib
-	roscpp
-	geometry_msgs
-    object_recognition
-	std_msgs
-	visualization_msgs
-    control_msgs
-	moveit_msgs
-	moveit_core
-	moveit_ros_planning
-	moveit_ros_planning_interface
-	tf
-	tf_conversions
-	eigen_conversions
-	message_generation)
+  actionlib
+  roscpp
+  geometry_msgs
+  shape_msgs
+  std_msgs
+  moveit_msgs
+  control_msgs
+  visualization_msgs
+  object_recognition
+  moveit_core
+  moveit_ros_planning
+  moveit_ros_planning_interface
+  tf
+  tf_conversions
+  eigen_conversions
+  message_generation)
 
 add_action_files(
-	DIRECTORY action 
-	FILES ExplorePushes.action MoveObject.action
-)
+  DIRECTORY action
+  FILES ExplorePushes.action MoveObject.action
+  )
 
 add_message_files(
-	FILES
-	PushApproach.msg
-	Push.msg
-	PushTrajectory.msg
-)
+  FILES
+  PushApproach.msg
+  Push.msg
+  PushTrajectory.msg
+  )
 
 add_service_files(
-	FILES
-	PerformRandomPush.srv
-	ExecutePush.srv
-	PusherMovement.srv
-	SamplePredictivePush.srv
-	PredictPush.srv
-	SteerPush.srv
-)
+  FILES
+  PerformRandomPush.srv
+  ExecutePush.srv
+  PusherMovement.srv
+  SamplePredictivePush.srv
+  PredictPush.srv
+  SteerPush.srv
+  )
 
 generate_messages(
-	DEPENDENCIES
-	geometry_msgs
-	actionlib_msgs
-)
+  DEPENDENCIES
+  geometry_msgs
+  actionlib_msgs
+  )
 
 catkin_package(INCLUDE_DIRS
-		include
-		CATKIN_DEPENDS 
-		message_runtime)
+  include
+  CATKIN_DEPENDS
+  message_runtime)
 
 set(PROJECT_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/include/ur5_pusher)
 
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
 include_directories(
-    include
- ${catkin_INCLUDE_DIRS}
-)
+  include
+  ${catkin_INCLUDE_DIRS}
+  )
 
 add_library(ur5_pusher src/pusher.cpp)
 

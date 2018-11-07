@@ -385,7 +385,8 @@ namespace tams_ur5_push_execution
 
             bool createRandomPushMsg(Push& push) {
                 push.mode = Push::LINEAR;
-                push_sampler_.setMarker(marker_);
+                push_sampler_.setObject(marker_);
+                push_sampler_.setObjectPose(marker_.pose);
 
                 if(push_sampler_.sampleRandomPush(push))
                 {

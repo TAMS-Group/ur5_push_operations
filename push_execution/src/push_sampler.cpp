@@ -3,25 +3,63 @@
 namespace ur5_pusher
 {
 
-  void PushSampler::setMarker(const visualization_msgs::Marker& marker)
+  bool PushSampler::setObject(const visualization_msgs::Marker& marker)
   {
-    marker_ = marker;
+    if(marker.type != visualization_msgs::Marker::CUBE) {
+      ROS_ERROR_STREAM("Invalid object passed to push sampler - Only BOX/CUBE types are supported!");
+      return false;
+    }
+
+    shape_.type = shape_msgs::SolidPrimitive::BOX;
+    shape_.dimensions.resize(3);
+    shape_.dimensions.push_back(marker.scale.x);
+    shape_.dimensions.push_back(marker.scale.y);
+    shape_.dimensions.push_back(marker.scale.z);
+    object_ready_ = true;
+    return true;
+  }
+
+  bool PushSampler::setObject(const moveit_msgs::CollisionObject& object)
+  {
+    if(object.primitives.size() != 1) {
+      ROS_ERROR("Invalid object passed to push sampler - Collision object has invalid number of primitive shapes, should be 1!");
+      return false;
+    }
+    if(object.primitives[0].type != shape_msgs::SolidPrimitive::BOX) {
+      ROS_ERROR("Invalid object passed to push sampler - Only BOX/CUBE types are supported!");
+      return false;
+    }
+
+    return setObject(object.primitives[0]);
+  }
+
+  bool PushSampler::setObject(const shape_msgs::SolidPrimitive& shape)
+  {
+    if(shape.type != shape_msgs::SolidPrimitive::BOX) {
+      ROS_ERROR("Invalid object passed to push sampler - Only BOX/CUBE types are supported!");
+      return false;
+    }
+    shape_ = shape;
+    object_ready_ = true;
+    return true;
   }
 
   bool PushSampler::sampleRandomPush(tams_ur5_push_execution::Push& push)
   {
     push.distance = sampleRandomPushDistance();
-    sampleRandomPushApproach(push.approach);
-    return true;
+    return sampleRandomPushApproach(push.approach);
   }
 
-  void PushSampler::sampleRandomPushApproach(tams_ur5_push_execution::PushApproach& approach)
+  bool PushSampler::sampleRandomPushApproach(tams_ur5_push_execution::PushApproach& approach)
   {
-    approach.frame_id = marker_.header.frame_id;
-    geometry_msgs::Pose approach_pose = sampleRandomPoseFromBox(marker_.scale.x, marker_.scale.y, marker_.scale.z);
+    if(!object_ready_) return false;
+
+    geometry_msgs::Pose approach_pose = sampleRandomPoseFromBox(shape_.dimensions[0],
+          shape_.dimensions[1], shape_.dimensions[2]);
     approach.point = approach_pose.position;
     approach.normal = approach_pose.orientation;
     approach.angle = sampleRandomPushAngle();
+    return true;
   }
 
   /**

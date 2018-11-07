@@ -17,7 +17,11 @@ namespace ur5_pusher
   {
     public:
       SafetyPushSampler();
-      void setReferenceFrame(const std::string& reference_frame);
+
+      void setReferenceFrame(const std::string& reference_frame) { reference_frame_ = reference_frame; };
+      void setObjectFrame(const std::string& object_frame) { object_frame_ = object_frame; };
+      void setObjectPose(const geometry_msgs::Pose pose) { object_pose_ = pose; };
+
       bool sampleRandomPush(tams_ur5_push_execution::Push& push);
       void adjustContactHeight(tams_ur5_push_execution::Push& push);
 
@@ -32,6 +36,9 @@ namespace ur5_pusher
       float tip_radius_;
 
       std::string reference_frame_;
+      std::string object_frame_;
+      geometry_msgs::Pose object_pose_;
+
       tf::TransformListener tf_listener_;
 
       int attempts_ = 100;
