@@ -50,4 +50,4 @@ include_directories(
 
 add_executable(push_planner_node src/push_planner_node.cpp)
 add_dependencies(push_planner_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
-target_link_libraries(push_planner_node ${catkin_LIBRARIES} ${OMPL_LIBRARIES} push_approach_sampler push_predictor)
+target_link_libraries(push_planner_node ${catkin_LIBRARIES} ${OMPL_LIBRARIES} push_sampler push_predictor)

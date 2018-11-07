@@ -49,7 +49,7 @@
 
 // pushing
 #include <tams_ur5_push_execution/Push.h>
-#include <ur5_pusher/push_approach_sampler.h>
+#include <ur5_pusher/push_sampler.h>
 
 #pragma once
 
@@ -57,11 +57,11 @@ const double dimX = 0.162;
 const double dimY = 0.23;
 const double dimZ = 0.112;
 
-ur5_pusher::PushApproachSampler* push_sampler_;
+ur5_pusher::PushSampler* push_sampler_;
 
-ur5_pusher::PushApproachSampler* getSampler() {
+ur5_pusher::PushSampler* getSampler() {
   if(push_sampler_==NULL)
-    push_sampler_ = new ur5_pusher::PushApproachSampler;
+    push_sampler_ = new ur5_pusher::PushSampler;
   return push_sampler_;
 }
 

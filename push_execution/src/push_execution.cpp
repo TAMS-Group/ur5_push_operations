@@ -23,7 +23,7 @@
 #include <control_msgs/FollowJointTrajectoryActionResult.h>
 
 #include <ur5_pusher/pusher.h>
-#include <ur5_pusher/push_approach_sampler.h>
+#include <ur5_pusher/safety_push_sampler.h>
 
 #include <tams_ur5_push_execution/Push.h>
 #include <tams_ur5_push_execution/PushApproach.h>
@@ -64,7 +64,7 @@ namespace tams_ur5_push_execution
 
             moveit::planning_interface::PlanningSceneInterface psi_;
 
-            ur5_pusher::PushApproachSampler push_sampler_;
+            ur5_pusher::SafetyPushSampler push_sampler_;
 
             ros::ServiceClient snapshot_client_;
             bool take_snapshots_ = false;

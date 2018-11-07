@@ -41,7 +41,7 @@
 #include <ompl/control/spaces/RealVectorControlSpace.h>
 
 #include <push_prediction/push_predictor.h>
-#include <ur5_pusher/push_approach_sampler.h>
+#include <ur5_pusher/push_sampler.h>
 
 
 
@@ -54,7 +54,7 @@ namespace push_planning {
       const oc::SpaceInformationPtr si_;
       const oc::ControlSamplerPtr cs_;
 
-      ur5_pusher::PushApproachSampler* const push_sampler_;
+      ur5_pusher::PushSampler* const push_sampler_;
       push_prediction::PushPredictor* const predictor_;
 
       const bool canSteer_;
@@ -72,7 +72,7 @@ namespace push_planning {
       cs_(si->allocControlSampler()),
       canSteer_(canSteer),
       predictor_(new push_prediction::PushPredictor()),
-      push_sampler_(new ur5_pusher::PushApproachSampler())
+      push_sampler_(new ur5_pusher::PushSampler())
     {
       predictor_->setReuseSolutions(true);
     }
