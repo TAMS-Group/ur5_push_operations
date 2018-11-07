@@ -55,70 +55,46 @@
 namespace ob = ompl::base;
 namespace oc = ompl::control;
 
-moveit_msgs::AttachedCollisionObject getAttachedCollisionObject(const double& x, const double& y, const double& z){
+static moveit_msgs::AttachedCollisionObject createObject() {
   moveit_msgs::AttachedCollisionObject obj;
   obj.link_name = "s_model_tool0";
   obj.object.header.frame_id = "/table_top";
   obj.object.id = "pushable_object";
-  shape_msgs::SolidPrimitive primitive;
-  primitive.type = primitive.BOX;
-  primitive.dimensions.push_back(x);
-  primitive.dimensions.push_back(y);
-  primitive.dimensions.push_back(z);
-  obj.object.primitives.push_back(primitive);
+  obj.object.primitive_poses.resize(1);
+  obj.object.primitives.resize(1);
+  obj.object.primitives[0].type = shape_msgs::SolidPrimitive::BOX;
+  obj.object.primitives[0].dimensions.push_back(0.162);
+  obj.object.primitives[0].dimensions.push_back(0.23);
+  obj.object.primitives[0].dimensions.push_back(0.112);
+  obj.object.operation = moveit_msgs::CollisionObject::ADD;
   return obj;
 }
+
+// this should be initialized from shape
+static moveit_msgs::AttachedCollisionObject obj = createObject();
+
 
 class PushStateValidityChecker : public ob::StateValidityChecker
 {
   private:
     const oc::SpaceInformationPtr si_;
     const planning_scene::PlanningScenePtr scene_;
-    const double dimX = 0.162;
-    const double dimY = 0.23;
-    const double dimZ = 0.112;
 
   public:
-    PushStateValidityChecker(const oc::SpaceInformationPtr &si, const planning_scene::PlanningScenePtr scene) : ob::StateValidityChecker(si), si_(si), scene_(scene)
-  {
-
-  }
+    PushStateValidityChecker(const oc::SpaceInformationPtr &si, const planning_scene::PlanningScenePtr scene)
+      : ob::StateValidityChecker(si), si_(si), scene_(scene)
+    {  }
 
     bool isValid(const ob::State *state) const override
     {
-      //    ob::ScopedState<ob::SE2StateSpace>
-      // cast the abstract state type to the type we expect
-      //const auto *se2state = state->as<ob::SE2StateSpace::StateType>();
-
-      //// extract the first component of the state and cast it to what we expect
-      //const auto *pos = se2state->as<ob::RealVectorStateSpace::StateType>(0);
-
-      //// extract the second component of the state and cast it to what we expect
-      //const auto *rot = se2state->as<ob::SO2StateSpace::StateType>(1);
-
-      //// check validity of state defined by pos & rot
-
-
-      //// return a value that is always true but uses the two variables we define, so we avoid compiler warnings
       return si_->satisfiesBounds(state) && !isStateColliding(state);
     }
 
     bool isStateColliding(const ob::State *state) const
     {
-      moveit_msgs::AttachedCollisionObject obj = getAttachedCollisionObject(dimX, dimY, dimZ);
-      obj.object.operation = moveit_msgs::CollisionObject::ADD;
-
-      // create object pose
-      //const auto *se2state = state->as<ob::SE2StateSpace::StateType>();
-
-      geometry_msgs::Pose pose;
-      convertStateToPose(state, pose);
-      //pose.position.x = se2state->getX();
-      //pose.position.y = se2state->getY();
-      pose.position.z = 0.5 * dimZ + 0.001;
-      //tf::quaternionTFToMsg(tf::createQuaternionFromYaw(se2state->getYaw()), pose.orientation);
-
-      obj.object.primitive_poses.push_back(pose);
+      // move object to state and check for collisions
+      convertStateToPose(state, obj.object.primitive_poses[0]);
+      obj.object.primitive_poses[0].position.z = 0.5 * dimZ + 0.001;
       scene_->processAttachedCollisionObjectMsg(obj);
       return scene_->isStateColliding();
     }

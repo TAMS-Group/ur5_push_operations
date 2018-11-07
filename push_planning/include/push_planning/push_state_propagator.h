@@ -42,6 +42,7 @@
 
 #include <push_prediction/push_predictor.h>
 #include <ur5_pusher/push_sampler.h>
+#include <push_planning/conversions.h>
 
 
 
@@ -59,10 +60,6 @@ namespace push_planning {
       const bool canSteer_;
 
       bool set_distance_from_duration_ = false;
-
-      const double dimX = 0.162;
-      const double dimY = 0.23;
-      const double dimZ = 0.112;
 
     public:
 
@@ -134,7 +131,7 @@ namespace push_planning {
         const double yaw = se2state->getYaw();
 
         tams_ur5_push_execution::Push push;
-        getPushFromControl(control, push);
+        convertControlToPush(control, push);
         if(set_distance_from_duration_)
           push.distance = duration;
 
@@ -157,16 +154,6 @@ namespace push_planning {
             next_pos.translation().x(),
             next_pos.translation().y());
         result->as<ob::SE2StateSpace::StateType>()->setYaw( std::fmod(yaw + next_yaw + M_PI , 2 * M_PI) - M_PI);
-      }
-
-      void getPushFromControl(const oc::Control *control, tams_ur5_push_execution::Push& push) const
-      {
-        const double* ctrl = control->as<oc::RealVectorControlSpace::ControlType>()->values;
-        geometry_msgs::Pose pose = ur5_pusher::PushSampler::getPoseFromBoxBorder(ctrl[0], dimX, dimY, dimZ);
-        push.approach.point = pose.position;
-        push.approach.normal = pose.orientation;
-        push.approach.angle = ctrl[1] - 0.5;
-        push.distance = ctrl[2] * 0.05;
       }
 
       void se2StateToEigen(const ob::State *state, Eigen::Affine2d& pose) const
@@ -220,7 +207,7 @@ namespace push_planning {
 
           // sample control
           cs_->sample(control);
-          getPushFromControl(control, push);
+          convertControlToPush(control, push);
 
           // predict sampled push
           predictor_->predict(push, pose);
@@ -273,7 +260,7 @@ namespace push_planning {
 
           // sample control
           cs_->sample(control);
-          getPushFromControl(control, push);
+          convertControlToPush(control, push);
 
           // predict sampled push
           predictor_->predict(push, pose);
