@@ -76,8 +76,8 @@ target_link_libraries(push_execution ${catkin_LIBRARIES} ur5_pusher push_sampler
 add_dependencies(push_execution ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## Declare a C++ library
-add_executable(push_bringup src/push_bringup.cpp)
-target_link_libraries(push_bringup ${catkin_LIBRARIES} ur5_pusher)
-add_dependencies(push_bringup ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+add_executable(cli src/cli.cpp)
+target_link_libraries(cli ${catkin_LIBRARIES} ur5_pusher)
+add_dependencies(cli ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 install(DIRECTORY include DESTINATION ${CATKIN_GLOBAL_INCLUDE_DESTINATION})
