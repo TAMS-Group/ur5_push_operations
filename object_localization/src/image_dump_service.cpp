@@ -4,9 +4,9 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <image_transport/image_transport.h>
-#include <ur5_pushing_object_recognition/ImageDump.h>
+#include <tams_ur5_pushing_object_localization/ImageDump.h>
 
-namespace ur5_pushing_object_recognition {
+namespace tams_ur5_pushing_object_localization {
 
     class ImageDumpService {
 
@@ -89,13 +89,13 @@ namespace ur5_pushing_object_recognition {
 
 int main(int argc, char** argv)
 {
-    ros::init(argc, argv, "push_execution_node");
+    ros::init(argc, argv, "image_dump_service");
     ros::AsyncSpinner spinner(4);
     spinner.start();
     ros::NodeHandle nh;
     std::string push_results_directory;
     if(nh.getParam("push_result_directory", push_results_directory)) {
-	    ur5_pushing_object_recognition::ImageDumpService ids("/kinect2/qhd/image_color", push_results_directory + "/images");
+	    tams_ur5_pushing_object_localization::ImageDumpService ids("/kinect2/qhd/image_color", push_results_directory + "/images");
     } else {
 	    ROS_ERROR("Failed to retrieve push results directory!");
     }

@@ -8,11 +8,11 @@
 
    	<param name="move_group/constraint_approximations_path" value="$(find ur5_push_setup)/cadb"/>
 
-	<include file="$(find ur5_pushing_object_recognition)/launch/object_recognition.launch">
+	<include file="$(find tams_ur5_pushing_object_localization)/launch/object_localization.launch">
 		<arg name="demo_mode" value="false"/>
 	</include>
 
-	<node pkg="ur5_pushing_object_recognition" type="image_dump_service" name="image_dump_service"/>
+	<node pkg="tams_ur5_pushing_object_localization" type="image_dump_service" name="image_dump_service"/>
 
 	<node pkg="tams_ur5_push_execution" type="push_execution" name="push_execution_service">
 		<param name="take_snapshots" value="true"/>

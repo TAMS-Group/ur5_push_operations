@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8.3)
-project(ur5_pushing_object_recognition)
+project(tams_ur5_pushing_object_localization)
 
 set(CMAKE_CXX_STANDARD 11)
 
@@ -36,6 +36,6 @@ add_executable(image_dump_service src/image_dump_service.cpp)
 target_link_libraries(image_dump_service ${catkin_LIBRARIES})
 add_dependencies(image_dump_service ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
-add_executable(${PROJECT_NAME} src/object_recognition.cpp)
-target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES})
-add_dependencies(${PROJECT_NAME} ${catkin_EXPORTED_TARGETS})
+add_executable(object_localization src/object_localization.cpp)
+target_link_libraries(object_localization ${catkin_LIBRARIES})
+add_dependencies(object_localization ${catkin_EXPORTED_TARGETS})

@@ -19,7 +19,7 @@ namespace{
     }
 }
 
-class ObjectRecognitionNode {
+class ObjectLocalizationNode {
     private:
         ros::NodeHandle nh_;
         ros::NodeHandle ph_;
@@ -51,9 +51,9 @@ class ObjectRecognitionNode {
 
         bool knows_transform_ = false;
     public:
-        ObjectRecognitionNode() : initialized_(false) {
+        ObjectLocalizationNode() : initialized_(false) {
             if(!initialized_) {
-                ROS_INFO_STREAM("ObjectRecognitionNode running!");
+                ROS_INFO_STREAM("ObjectLocalizationNode running!");
                 initialized_ = true;
                 nh_ = (*new ros::NodeHandle());
                 ph_ = (*new ros::NodeHandle("~"));
@@ -80,7 +80,7 @@ class ObjectRecognitionNode {
                         ROS_WARN_STREAM("Failed to construct Marker from object configuration!");
                     }
                 } else {
-                    sub_ = nh_.subscribe("tag_detections", 1, &ObjectRecognitionNode::onDetectAprilTags, this);
+                    sub_ = nh_.subscribe("tag_detections", 1, &ObjectLocalizationNode::onDetectAprilTags, this);
                     ros::Rate rate(10);
                     while(ros::ok()) {
                         if(knows_transform_) {
@@ -226,6 +226,6 @@ int main(int argc, char** argv) {
 
     spinner.start();
 
-    ObjectRecognitionNode obj_rec;
+    ObjectLocalizationNode oln;
     return 0;
 };

@@ -65,7 +65,7 @@
 
 #include <std_msgs/Float64.h>
 
-#include <ur5_pushing_object_recognition/ImageDump.h>
+#include <tams_ur5_pushing_object_localization/ImageDump.h>
 
 #pragma once
 
@@ -137,7 +137,7 @@ namespace push_execution
             }
 
             void enableSnapshots() {
-                snapshot_client_ = nh_.serviceClient<ur5_pushing_object_recognition::ImageDump>("/image_dump_service");
+                snapshot_client_ = nh_.serviceClient<tams_ur5_pushing_object_localization::ImageDump>("/image_dump_service");
                 take_snapshots_ = true;
             }
 
@@ -429,7 +429,7 @@ namespace push_execution
 
             void take_snapshot(const std::string& filename)
             {
-                ur5_pushing_object_recognition::ImageDump srv;
+                tams_ur5_pushing_object_localization::ImageDump srv;
                 srv.request.filename = filename;
                 snapshot_client_.call(srv);
             }
