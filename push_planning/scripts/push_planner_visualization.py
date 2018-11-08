@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import rospy
-from tams_ur5_push_execution.msg import PushTrajectory 
+from tams_ur5_push_msgs.msg import PushTrajectory 
 from visualization_msgs.msg import Marker, MarkerArray
 from std_msgs.msg import ColorRGBA
 from geometry_msgs.msg import Pose, Vector3

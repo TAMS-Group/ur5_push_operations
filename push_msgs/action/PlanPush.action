@@ -11,7 +11,7 @@ geometry_msgs/Pose goal_pose
 ---
 
 # The planned trajectory
-tams_ur5_push_msgs/PushTrajectory trajectory
+PushTrajectory trajectory
 
 # The complete planning graph (might not belong into this action)
 graph_msgs/GeometryGraph planner_data

@@ -13,23 +13,11 @@ find_package(catkin REQUIRED COMPONENTS
     geometry_msgs
     eigen_conversions
     push_prediction
-    message_generation
     moveit_msgs
     moveit_core
     moveit_ros_planning
     moveit_ros_planning_interface
     roscpp)
-
-add_action_files(
-    DIRECTORY action
-    FILES PushPlan.action)
-
-generate_messages(
-    DEPENDENCIES
-    geometry_msgs
-    actionlib_msgs
-    graph_msgs
-    tams_ur5_push_msgs)
 
 ## System dependencies are found with CMake's conventions
 find_package(ompl REQUIRED)
@@ -38,8 +26,6 @@ catkin_package(
     LIBRARIES
     ${OMPL_LIBRARIES}
     ${OMPL_INCLUDE_DIRS}
-    CATKIN_DEPENDS
-    message_runtime
     )
 
 include_directories(
@@ -50,5 +36,5 @@ include_directories(
     )
 
 add_executable(push_planner_node src/push_planner_node.cpp)
-add_dependencies(push_planner_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+add_dependencies(push_planner_node ${catkin_EXPORTED_TARGETS})
 target_link_libraries(push_planner_node ${catkin_LIBRARIES} ${OMPL_LIBRARIES} push_sampler push_predictor)

@@ -5,11 +5,14 @@ find_package(catkin REQUIRED
 	geometry_msgs
 	actionlib_msgs
 	message_generation
+	graph_msgs
 	)
 
 add_action_files(
-  DIRECTORY action
-  FILES ExplorePushes.action MoveObject.action
+  DIRECTORY action FILES
+  ExplorePushes.action
+  MoveObject.action
+  PlanPush.action
   )
 
 add_message_files(
@@ -34,6 +37,7 @@ generate_messages(
   DEPENDENCIES
   geometry_msgs
   actionlib_msgs
+  graph_msgs
   )
 
 

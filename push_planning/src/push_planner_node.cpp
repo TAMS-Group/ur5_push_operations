@@ -66,9 +66,8 @@
 
 
 // pushing
-#include <tams_ur5_push_msgs/Push.h>
 #include <tams_ur5_push_msgs/PushTrajectory.h>
-#include <push_planning/PushPlanAction.h>
+#include <tams_ur5_push_msgs/PlanPushAction.h>
 
 #include <push_planning/chained_control_sampler.h>
 #include <push_planning/push_state_propagator.h>
@@ -78,13 +77,14 @@
 
 namespace ob = ompl::base;
 namespace oc = ompl::control;
+namespace push_msgs = tams_ur5_push_msgs;
 
 ros::Publisher traj_pub_, graph_pub_;
 
 
 void publishPushTrajectory(const ompl::control::PathControl& solution) 
 {
-  tams_ur5_push_msgs::PushTrajectory traj_msg;
+  push_msgs::PushTrajectory traj_msg;
   controlPathToPushTrajectoryMsg(solution, traj_msg);
   traj_pub_.publish(traj_msg);
 }
@@ -129,7 +129,7 @@ namespace push_planning {
       ros::NodeHandle pnh_;
 
 
-      actionlib::SimpleActionServer<PushPlanAction> as_;
+      actionlib::SimpleActionServer<push_msgs::PlanPushAction> as_;
 
 
       ExplorationStrategy strategy_ = CHAINED;
@@ -210,7 +210,7 @@ namespace push_planning {
         return scene;
       }
 
-      void planCB(const PushPlanGoalConstPtr& goal)
+      void planCB(const push_msgs::PlanPushGoalConstPtr& goal)
       {
 
         // extract goal request (not used atm)
@@ -282,7 +282,7 @@ namespace push_planning {
         si->setPropagationStepSize(propagation_step_size_);
 
         // attempt to solve the planning problem
-        PushPlanResult result;
+	push_msgs::PlanPushResult result;
         if (setup->solve(planning_time_)) {
 
           // return solution

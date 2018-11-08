@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import rospy
-from tams_ur5_push_execution.srv import *
+from tams_ur5_push_msgs.srv import *
 from geometry_msgs.msg import Pose
 
 from lib import content_helper as ch

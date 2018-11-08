@@ -7,12 +7,11 @@ import tf
 from tf import TransformListener
 import actionlib
 
-from push_planning.msg import PushPlanAction, PushPlanGoal
+
+from tams_ur5_push_msgs.srv import ExecutePush, ExecutePushRequest, ExecutePushResponse
+from tams_ur5_push_msgs.msg import PlanPushAction, PlanPushGoal
+from tams_ur5_push_msgs.msg import MoveObjectAction, MoveObjectGoal, MoveObjectResult
 import push_planner_visualization as ppv
-
-
-from tams_ur5_push_execution.srv import ExecutePush, ExecutePushRequest, ExecutePushResponse
-from tams_ur5_push_execution.msg import MoveObjectAction, MoveObjectGoal, MoveObjectResult
 
 
 from interactive_markers.interactive_marker_server import *
@@ -117,7 +116,7 @@ def call_push_plan_action(object_id, start_pose, goal_pose):
     global planner_client, last_solution
 
     #create goal
-    goal = PushPlanGoal()
+    goal = PlanPushGoal()
     goal.object_id = object_id
     goal.start_pose = start_pose
     goal.goal_pose = goal_pose
@@ -300,7 +299,7 @@ def init_interaction_server():
 
     ppv.init_publishers()
 
-    planner_client = actionlib.SimpleActionClient('/push_plan_action', PushPlanAction)
+    planner_client = actionlib.SimpleActionClient('/push_plan_action', PlanPushAction)
 
 
 if __name__=="__main__":
