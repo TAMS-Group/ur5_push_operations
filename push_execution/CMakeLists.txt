@@ -71,7 +71,7 @@ add_library(ur5_pusher src/pusher.cpp)
 add_library(push_sampler src/safety_push_sampler.cpp src/push_sampler.cpp)
 add_dependencies(push_sampler ${${PROJECT_NAME}_EXPORTED_TARGETS})
 
-add_executable(push_execution src/push_execution.cpp)
+add_executable(push_execution src/push_execution_server.cpp)
 target_link_libraries(push_execution ${catkin_LIBRARIES} ur5_pusher push_sampler)
 add_dependencies(push_execution ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
