@@ -76,7 +76,7 @@ target_link_libraries(push_execution ${catkin_LIBRARIES} pusher push_sampler)
 add_dependencies(push_execution ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## Declare a C++ library
-add_executable(cli src/cli.cpp)
+add_executable(cli src/cli/cli.cpp)
 target_link_libraries(cli ${catkin_LIBRARIES} pusher)
 add_dependencies(cli ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
