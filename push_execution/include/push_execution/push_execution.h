@@ -59,10 +59,10 @@
 #include <tams_ur5_push_msgs/MoveObjectAction.h>
 #include <tams_ur5_push_msgs/Push.h>
 #include <tams_ur5_push_msgs/PushApproach.h>
+#include <tams_ur5_push_msgs/ImageDump.h>
 
 #include <std_msgs/Float64.h>
 
-#include <tams_ur5_pushing_object_localization/ImageDump.h>
 
 #pragma once
 
@@ -71,6 +71,8 @@
 const double TIP_RADIUS = 0.004;
 
 std::string MARKER_TOPIC = "/pushable_objects";
+
+namespace push_msgs = tams_ur5_push_msgs;
 
 namespace push_execution
 {
@@ -129,12 +131,12 @@ namespace push_execution
             }
 
             bool performRandomPush(push_execution::Pusher& pusher, bool execute_plan=false) {
-              tams_ur5_push_msgs::ExplorePushesFeedback fb;
+              push_msgs::ExplorePushesFeedback fb;
                 return performRandomPush(pusher, fb, execute_plan);
             }
 
             void enableSnapshots() {
-                snapshot_client_ = nh_.serviceClient<tams_ur5_pushing_object_localization::ImageDump>("/image_dump_service");
+                snapshot_client_ = nh_.serviceClient<push_msgs::ImageDump>("/image_dump_service");
                 take_snapshots_ = true;
             }
 
@@ -143,9 +145,9 @@ namespace push_execution
             }
 
 
-            bool performRandomPush(Pusher& pusher, tams_ur5_push_msgs::ExplorePushesFeedback& feedback, bool execute_plan=true) 
+            bool performRandomPush(Pusher& pusher, push_msgs::ExplorePushesFeedback& feedback, bool execute_plan=true) 
             {
-              tams_ur5_push_msgs::Push push;
+              push_msgs::Push push;
                 ros::Duration(0.5).sleep();
                 if (isObjectClear() && createRandomPushMsg(push)) {
                     feedback.push = push;
@@ -159,7 +161,7 @@ namespace push_execution
                 }
             }
 
-            bool performPush(Pusher& pusher, const tams_ur5_push_msgs::Push& push, tams_ur5_push_msgs::MoveObjectFeedback& feedback, bool execute_plan=true) 
+            bool performPush(Pusher& pusher, const push_msgs::Push& push, push_msgs::MoveObjectFeedback& feedback, bool execute_plan=true) 
             {
                 ros::Duration(0.5).sleep();
                 if (isObjectClear()) {
@@ -174,7 +176,7 @@ namespace push_execution
                 }
             }
 
-            bool performPush(Pusher& pusher, const tams_ur5_push_msgs::Push& push, int attempt_id, bool execute_plan=true) 
+            bool performPush(Pusher& pusher, const push_msgs::Push& push, int attempt_id, bool execute_plan=true) 
             {
                 if(isObjectClear()) {
 
@@ -411,8 +413,8 @@ namespace push_execution
                 psi_.removeCollisionObjects(object_ids);
             }
 
-            bool createRandomPushMsg(tams_ur5_push_msgs::Push& push) {
-                push.mode = tams_ur5_push_msgs::Push::LINEAR;
+            bool createRandomPushMsg(push_msgs::Push& push) {
+                push.mode = push_msgs::Push::LINEAR;
                 push_sampler_.setObject(marker_);
                 push_sampler_.setObjectPose(marker_.pose);
 
@@ -426,7 +428,7 @@ namespace push_execution
 
             void take_snapshot(const std::string& filename)
             {
-                tams_ur5_pushing_object_localization::ImageDump srv;
+                push_msgs::ImageDump srv;
                 srv.request.filename = filename;
                 snapshot_client_.call(srv);
             }
@@ -448,7 +450,7 @@ namespace push_execution
                 return constraints;
             }
 
-            void visualizePushApproach(const tams_ur5_push_msgs::PushApproach& approach) {
+            void visualizePushApproach(const push_msgs::PushApproach& approach) {
                 geometry_msgs::Pose pose;
                 pose.position = approach.point;
                 pose.orientation = approach.normal;
@@ -491,7 +493,7 @@ namespace push_execution
 
 
 
-            bool getPushWaypoints(const tams_ur5_push_msgs::Push& push, std::vector<std::vector<geometry_msgs::Pose>>& waypoints, std::vector<double>& wp_distances) {
+            bool getPushWaypoints(const push_msgs::Push& push, std::vector<std::vector<geometry_msgs::Pose>>& waypoints, std::vector<double>& wp_distances) {
 
                 // object pose
                 geometry_msgs::PoseStamped obj_pose;

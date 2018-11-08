@@ -27,6 +27,7 @@ add_service_files(
   SamplePredictivePush.srv
   PredictPush.srv
   SteerPush.srv
+  ImageDump.srv
   )
 
 generate_messages(

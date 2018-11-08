@@ -37,7 +37,9 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <image_transport/image_transport.h>
-#include <tams_ur5_pushing_object_localization/ImageDump.h>
+#include <tams_ur5_push_msgs/ImageDump.h>
+
+namespace push_msgs = tams_ur5_push_msgs;
 
 namespace tams_ur5_pushing_object_localization {
 
@@ -56,7 +58,7 @@ namespace tams_ur5_pushing_object_localization {
         std::queue<ImageDumpTask> image_dump_tasks_;
         sensor_msgs::ImageConstPtr image_ = NULL;
 
-        bool onRequestImageDump(ImageDump::Request& req, ImageDump::Response& res)
+        bool onRequestImageDump(push_msgs::ImageDump::Request& req, push_msgs::ImageDump::Response& res)
         {
             ROS_INFO_STREAM("Request image dump: " << req.filename);
             const sensor_msgs::ImageConstPtr image(image_);
