@@ -66,18 +66,18 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
   )
 
-add_library(ur5_pusher src/pusher.cpp)
+add_library(pusher src/push_execution/pusher.cpp)
 
 add_library(push_sampler src/push_sampler/exploration_sampler.cpp src/push_sampler/push_sampler.cpp)
 add_dependencies(push_sampler ${${PROJECT_NAME}_EXPORTED_TARGETS})
 
-add_executable(push_execution src/push_execution_server.cpp)
-target_link_libraries(push_execution ${catkin_LIBRARIES} ur5_pusher push_sampler)
+add_executable(push_execution src/push_execution/push_execution_server.cpp)
+target_link_libraries(push_execution ${catkin_LIBRARIES} pusher push_sampler)
 add_dependencies(push_execution ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## Declare a C++ library
 add_executable(cli src/cli.cpp)
-target_link_libraries(cli ${catkin_LIBRARIES} ur5_pusher)
+target_link_libraries(cli ${catkin_LIBRARIES} pusher)
 add_dependencies(cli ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 install(DIRECTORY include DESTINATION ${CATKIN_GLOBAL_INCLUDE_DESTINATION})

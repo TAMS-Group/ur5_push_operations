@@ -55,11 +55,14 @@
 
 #include <visualization_msgs/Marker.h>
 
-#include <ur5_pusher/pusher.h>
+#include <push_execution/pusher.h>
 #include <push_sampler/exploration_sampler.h>
 
+#include <tams_ur5_push_execution/ExplorePushesAction.h>
+#include <tams_ur5_push_execution/MoveObjectAction.h>
 #include <tams_ur5_push_execution/Push.h>
 #include <tams_ur5_push_execution/PushApproach.h>
+
 #include <std_msgs/Float64.h>
 
 #include <ur5_pushing_object_recognition/ImageDump.h>
@@ -72,7 +75,7 @@ const double TIP_RADIUS = 0.004;
 
 std::string MARKER_TOPIC = "/pushable_objects";
 
-namespace tams_ur5_push_execution
+namespace push_execution
 {
     class PushExecution
     {
@@ -128,8 +131,8 @@ namespace tams_ur5_push_execution
                 marker_.id = -1;
             }
 
-            bool performRandomPush(ur5_pusher::Pusher& pusher, bool execute_plan=false) {
-                ExplorePushesFeedback fb;
+            bool performRandomPush(push_execution::Pusher& pusher, bool execute_plan=false) {
+              tams_ur5_push_execution::ExplorePushesFeedback fb;
                 return performRandomPush(pusher, fb, execute_plan);
             }
 
@@ -143,9 +146,9 @@ namespace tams_ur5_push_execution
             }
 
 
-            bool performRandomPush(ur5_pusher::Pusher& pusher, ExplorePushesFeedback& feedback, bool execute_plan=true) 
+            bool performRandomPush(Pusher& pusher, tams_ur5_push_execution::ExplorePushesFeedback& feedback, bool execute_plan=true) 
             {
-                Push push;
+              tams_ur5_push_execution::Push push;
                 ros::Duration(0.5).sleep();
                 if (isObjectClear() && createRandomPushMsg(push)) {
                     feedback.push = push;
@@ -159,7 +162,7 @@ namespace tams_ur5_push_execution
                 }
             }
 
-            bool performPush(ur5_pusher::Pusher& pusher, const Push& push, MoveObjectFeedback& feedback, bool execute_plan=true) 
+            bool performPush(Pusher& pusher, const tams_ur5_push_execution::Push& push, tams_ur5_push_execution::MoveObjectFeedback& feedback, bool execute_plan=true) 
             {
                 ros::Duration(0.5).sleep();
                 if (isObjectClear()) {
@@ -174,7 +177,7 @@ namespace tams_ur5_push_execution
                 }
             }
 
-            bool performPush(ur5_pusher::Pusher& pusher, const Push& push, int attempt_id, bool execute_plan=true) 
+            bool performPush(Pusher& pusher, const tams_ur5_push_execution::Push& push, int attempt_id, bool execute_plan=true) 
             {
                 if(isObjectClear()) {
 
@@ -333,7 +336,7 @@ namespace tams_ur5_push_execution
                 return false;
             }
 
-            bool pointAtBox(ur5_pusher::Pusher& pusher) {
+            bool pointAtBox(Pusher& pusher) {
                 if(marker_.header.frame_id.empty())
                     return false;
                 geometry_msgs::Pose pose;
@@ -388,7 +391,7 @@ namespace tams_ur5_push_execution
                 return true;
             }
 
-            void recomputeTimestamps(ur5_pusher::Pusher& pusher, moveit_msgs::RobotTrajectory& trajectory_msg, double max_vel=3.14, double max_accel=1.0) {
+            void recomputeTimestamps(Pusher& pusher, moveit_msgs::RobotTrajectory& trajectory_msg, double max_vel=3.14, double max_accel=1.0) {
 
                 robot_trajectory::RobotTrajectory traj(pusher.getRobotModel(), pusher.getName());
                 traj.setRobotTrajectoryMsg((*pusher.getCurrentState()), trajectory_msg);
@@ -411,8 +414,8 @@ namespace tams_ur5_push_execution
                 psi_.removeCollisionObjects(object_ids);
             }
 
-            bool createRandomPushMsg(Push& push) {
-                push.mode = Push::LINEAR;
+            bool createRandomPushMsg(tams_ur5_push_execution::Push& push) {
+                push.mode = tams_ur5_push_execution::Push::LINEAR;
                 push_sampler_.setObject(marker_);
                 push_sampler_.setObjectPose(marker_.pose);
 
@@ -448,7 +451,7 @@ namespace tams_ur5_push_execution
                 return constraints;
             }
 
-            void visualizePushApproach(const PushApproach& approach) {
+            void visualizePushApproach(const tams_ur5_push_execution::PushApproach& approach) {
                 geometry_msgs::Pose pose;
                 pose.position = approach.point;
                 pose.orientation = approach.normal;
@@ -556,7 +559,7 @@ namespace tams_ur5_push_execution
                 wp_distances = {approach_distance, push.distance, retreat_distance};
             }
 
-            bool computeCartesianPushTraj(ur5_pusher::Pusher& pusher, std::vector<std::vector<geometry_msgs::Pose>> waypoints, const std::vector<double> distances, moveit_msgs::RobotTrajectory& approach_traj, moveit_msgs::RobotTrajectory& push_traj, moveit_msgs::RobotTrajectory& retreat_traj, const robot_state::RobotState start_state)
+            bool computeCartesianPushTraj(Pusher& pusher, std::vector<std::vector<geometry_msgs::Pose>> waypoints, const std::vector<double> distances, moveit_msgs::RobotTrajectory& approach_traj, moveit_msgs::RobotTrajectory& push_traj, moveit_msgs::RobotTrajectory& retreat_traj, const robot_state::RobotState start_state)
             {
                 ros::Time start_time = ros::Time::now();
                 bool success = false;

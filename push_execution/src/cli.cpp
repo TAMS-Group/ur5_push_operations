@@ -24,7 +24,7 @@
 #include <actionlib/client/simple_action_client.h>
 #include <actionlib/client/terminal_state.h>
 
-#include <ur5_pusher/pusher.h>
+#include <push_execution/pusher.h>
 #include <tams_ur5_push_execution/PerformRandomPush.h>
 #include <tams_ur5_push_execution/PusherMovement.h>
 #include <tams_ur5_push_execution/ExplorePushesAction.h>
@@ -218,7 +218,7 @@ class PushExecutionClient {
 class PushBringup
 {
     private:
-        ur5_pusher::Pusher arm_;
+        push_execution::Pusher arm_;
         moveit::planning_interface::MoveGroupInterface gripper_;
         moveit::planning_interface::PlanningSceneInterface psi_;
 
