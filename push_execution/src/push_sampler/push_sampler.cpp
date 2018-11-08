@@ -1,9 +1,9 @@
-#include <ur5_pusher/push_sampler.h>
+#include <push_sampler/push_sampler.h>
 
 std::random_device rd;
 std::mt19937 gen{rd()};
 std::uniform_real_distribution<double> unif_dist_{0.0,1.0};
-namespace ur5_pusher
+namespace push_sampler
 {
 
   bool PushSampler::setObject(const visualization_msgs::Marker& marker)

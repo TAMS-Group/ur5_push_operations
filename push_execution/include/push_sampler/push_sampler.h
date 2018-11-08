@@ -13,7 +13,7 @@
 
 
 
-namespace ur5_pusher
+namespace push_sampler
 {
 
   class PushSampler

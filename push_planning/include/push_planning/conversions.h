@@ -49,7 +49,7 @@
 
 // pushing
 #include <tams_ur5_push_execution/Push.h>
-#include <ur5_pusher/push_sampler.h>
+#include <push_sampler/push_sampler.h>
 
 #pragma once
 
@@ -60,7 +60,7 @@ const double dimZ = 0.112;
 void convertControlToPush(const oc::Control *control, tams_ur5_push_execution::Push& push) {
   const double* ctrl = control->as<oc::RealVectorControlSpace::ControlType>()->values;
   //retrieve approach point from pivot and box dimensions
-  geometry_msgs::Pose pose = ur5_pusher::PushSampler::getPoseFromBoxBorder(ctrl[0], dimX, dimY, dimZ);
+  geometry_msgs::Pose pose = push_sampler::PushSampler::getPoseFromBoxBorder(ctrl[0], dimX, dimY, dimZ);
   push.approach.point = pose.position;
   push.approach.normal = pose.orientation;
   // normalize angle to +- 45°

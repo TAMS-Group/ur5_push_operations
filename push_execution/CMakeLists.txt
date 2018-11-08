@@ -57,7 +57,7 @@ catkin_package(INCLUDE_DIRS
   CATKIN_DEPENDS
   message_runtime)
 
-set(PROJECT_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/include/ur5_pusher)
+#set(PROJECT_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
@@ -68,7 +68,7 @@ include_directories(
 
 add_library(ur5_pusher src/pusher.cpp)
 
-add_library(push_sampler src/safety_push_sampler.cpp src/push_sampler.cpp)
+add_library(push_sampler src/push_sampler/exploration_sampler.cpp src/push_sampler/push_sampler.cpp)
 add_dependencies(push_sampler ${${PROJECT_NAME}_EXPORTED_TARGETS})
 
 add_executable(push_execution src/push_execution_server.cpp)

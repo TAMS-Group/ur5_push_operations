@@ -1,8 +1,8 @@
-#include <ur5_pusher/safety_push_sampler.h>
+#include <push_sampler/exploration_sampler.h>
 
-namespace ur5_pusher
+namespace push_sampler
 {
-  SafetyPushSampler::SafetyPushSampler() : PushSampler()
+  ExplorationSampler::ExplorationSampler() : PushSampler()
   {
     ros::NodeHandle pnh("~");
     pnh.param("min_table_distance", min_table_distance_, MIN_TABLE_DISTANCE);
@@ -11,7 +11,7 @@ namespace ur5_pusher
     pnh.param("tip_length", tip_length_, TIP_LENGTH);
   }
 
-  bool SafetyPushSampler::sampleRandomPush(tams_ur5_push_execution::Push& push)
+  bool ExplorationSampler::sampleRandomPush(tams_ur5_push_execution::Push& push)
   {
     if(!sampleSafePushApproach(push.approach, attempts_))
       return false;
@@ -21,7 +21,7 @@ namespace ur5_pusher
     return true;
   }
 
-  bool SafetyPushSampler::sampleSafePushApproach(tams_ur5_push_execution::PushApproach& approach, int attempts) {
+  bool ExplorationSampler::sampleSafePushApproach(tams_ur5_push_execution::PushApproach& approach, int attempts) {
     if(!object_ready_)
       return false;
 
@@ -77,7 +77,7 @@ namespace ur5_pusher
     return false;
   }
 
-  void SafetyPushSampler::adjustContactHeight(tams_ur5_push_execution::Push& push)
+  void ExplorationSampler::adjustContactHeight(tams_ur5_push_execution::Push& push)
   {
     double dim_z = shape_.dimensions[2];
     // Pose height is related to box height and tip length
