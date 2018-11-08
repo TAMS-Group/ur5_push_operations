@@ -14,13 +14,13 @@
   <build_depend>roscpp</build_depend>
   <build_depend>eigen_conversions</build_depend>
   <build_depend>tf</build_depend>
-  <build_depend>tams_ur5_push_execution</build_depend>
+  <build_depend>tams_ur5_push_msgs</build_depend>
   <build_depend>geometry_msgs</build_depend>
 
   <exec_depend>roscpp</exec_depend>
   <exec_depend>eigen_conversions</exec_depend>
   <exec_depend>tf</exec_depend>
-  <exec_depend>tams_ur5_push_execution</exec_depend>
+  <exec_depend>tams_ur5_push_msgs</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
 
 

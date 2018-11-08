@@ -63,10 +63,10 @@
 #include <actionlib/client/terminal_state.h>
 
 #include <push_execution/pusher.h>
-#include <tams_ur5_push_execution/PerformRandomPush.h>
-#include <tams_ur5_push_execution/PusherMovement.h>
-#include <tams_ur5_push_execution/ExplorePushesAction.h>
-#include <tams_ur5_push_execution/MoveObjectAction.h>
+#include <tams_ur5_push_msgs/PerformRandomPush.h>
+#include <tams_ur5_push_msgs/PusherMovement.h>
+#include <tams_ur5_push_msgs/ExplorePushesAction.h>
+#include <tams_ur5_push_msgs/MoveObjectAction.h>
 
 
 std::string COMMAND_MAINTENANCE = "maintenance";
@@ -95,8 +95,8 @@ class PushExecutionClient {
   public:
     ros::NodeHandle nh_;
 
-    actionlib::SimpleActionClient<tams_ur5_push_execution::ExplorePushesAction> explorer_;
-    actionlib::SimpleActionClient<tams_ur5_push_execution::MoveObjectAction> mover_;
+    actionlib::SimpleActionClient<tams_ur5_push_msgs::ExplorePushesAction> explorer_;
+    actionlib::SimpleActionClient<tams_ur5_push_msgs::MoveObjectAction> mover_;
 
 
     const std::string FN_PUSHES = "pushes";
@@ -120,7 +120,7 @@ class PushExecutionClient {
     bool performRandomPushAction(int samples=0)
     {
       explorer_.waitForServer();
-      tams_ur5_push_execution::ExplorePushesGoal goal;
+      tams_ur5_push_msgs::ExplorePushesGoal goal;
       goal.samples = samples;
       explorer_.sendGoal(goal, &exploreDoneCb, &activeCb, boost::bind(&PushExecutionClient::exploreFeedbackCb, this, _1));
       return true;
@@ -129,7 +129,7 @@ class PushExecutionClient {
     bool moveObjectToPose(const geometry_msgs::Pose& target)
     {
       mover_.waitForServer();
-      tams_ur5_push_execution::MoveObjectGoal goal;
+      tams_ur5_push_msgs::MoveObjectGoal goal;
       goal.target = target;
       mover_.sendGoal(goal, &moveDoneCb, &activeCb, boost::bind(&PushExecutionClient::moveFeedbackCb, this, _1));
       return true;
@@ -144,12 +144,12 @@ class PushExecutionClient {
 
   private:
     static void exploreDoneCb(const actionlib::SimpleClientGoalState& state,
-        const tams_ur5_push_execution::ExplorePushesResultConstPtr& result)
+        const tams_ur5_push_msgs::ExplorePushesResultConstPtr& result)
     {
     }
 
     static void moveDoneCb(const actionlib::SimpleClientGoalState& state,
-        const tams_ur5_push_execution::MoveObjectResultConstPtr& result)
+        const tams_ur5_push_msgs::MoveObjectResultConstPtr& result)
     {
     }
 
@@ -157,21 +157,21 @@ class PushExecutionClient {
     {
     }
 
-    void exploreFeedbackCb(const tams_ur5_push_execution::ExplorePushesFeedbackConstPtr& fb)
+    void exploreFeedbackCb(const tams_ur5_push_msgs::ExplorePushesFeedbackConstPtr& fb)
     {
       if(dump_feedback_) {
         dumpFeedback(fb->id, fb->pre_push, fb->post_push, fb->push);
       }
     }
 
-    void moveFeedbackCb(const tams_ur5_push_execution::MoveObjectFeedbackConstPtr& fb)
+    void moveFeedbackCb(const tams_ur5_push_msgs::MoveObjectFeedbackConstPtr& fb)
     {
       if(dump_feedback_) {
         dumpFeedback(fb->id, fb->pre_push, fb->post_push, fb->push);
       }
     }
 
-    void dumpFeedback(int id, const geometry_msgs::Pose& pre_push, const geometry_msgs::Pose& post_push, const tams_ur5_push_execution::Push& push) {
+    void dumpFeedback(int id, const geometry_msgs::Pose& pre_push, const geometry_msgs::Pose& post_push, const tams_ur5_push_msgs::Push& push) {
       write_csv_line(FN_PRE_POSES, id, pre_push);
       write_csv_line(FN_PUSHES, id, push);
       write_csv_line(FN_POST_POSES, id, post_push);
@@ -226,7 +226,7 @@ class PushExecutionClient {
       file.close();
     }
 
-    void write_csv_line(const std::string& file_name, int id, const tams_ur5_push_execution::Push& push)
+    void write_csv_line(const std::string& file_name, int id, const tams_ur5_push_msgs::Push& push)
     {
       std::ofstream file(dump_dir_ + "/" + file_name + ".csv", std::ofstream::out | std::ofstream::app);
       file << std::to_string(id) << ",";
@@ -274,7 +274,7 @@ class PushOperations
     PushOperations(const std::string& push_result_dir) : arm_("arm"), gripper_("gripper"), pec_(push_result_dir){
 
       ros::NodeHandle nh;
-      pusher_movements_ = nh.serviceClient<tams_ur5_push_execution::PusherMovement>("point_at_box");
+      pusher_movements_ = nh.serviceClient<tams_ur5_push_msgs::PusherMovement>("point_at_box");
       createMaintenanceState();
 
       push_target_.header.frame_id="table_top";
@@ -342,7 +342,7 @@ class PushOperations
     }
 
     bool pointAtBox() {
-      tams_ur5_push_execution::PusherMovement srv;
+      tams_ur5_push_msgs::PusherMovement srv;
       pusher_movements_.call(srv);
     }
 

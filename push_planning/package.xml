@@ -57,6 +57,7 @@
   <build_depend>graph_msgs</build_depend>
   <build_depend>geometry_msgs</build_depend>
   <build_depend>message_generation</build_depend>
+  <build_depend>tams_ur5_push_msgs</build_depend>
   <build_depend>tams_ur5_push_execution</build_depend>
   <build_depend>push_prediction</build_depend>
 
@@ -69,6 +70,7 @@
   <exec_depend>graph_msgs</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>message_runtime</exec_depend>
+  <exec_depend>tams_ur5_push_msgs</exec_depend>
   <exec_depend>tams_ur5_push_execution</exec_depend>
   <exec_depend>push_prediction</exec_depend>
 

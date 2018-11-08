@@ -11,7 +11,7 @@ namespace push_sampler
     pnh.param("tip_length", tip_length_, TIP_LENGTH);
   }
 
-  bool ExplorationSampler::sampleRandomPush(tams_ur5_push_execution::Push& push)
+  bool ExplorationSampler::sampleRandomPush(tams_ur5_push_msgs::Push& push)
   {
     if(!sampleSafePushApproach(push.approach, attempts_))
       return false;
@@ -21,7 +21,7 @@ namespace push_sampler
     return true;
   }
 
-  bool ExplorationSampler::sampleSafePushApproach(tams_ur5_push_execution::PushApproach& approach, int attempts) {
+  bool ExplorationSampler::sampleSafePushApproach(tams_ur5_push_msgs::PushApproach& approach, int attempts) {
     if(!object_ready_)
       return false;
 
@@ -77,7 +77,7 @@ namespace push_sampler
     return false;
   }
 
-  void ExplorationSampler::adjustContactHeight(tams_ur5_push_execution::Push& push)
+  void ExplorationSampler::adjustContactHeight(tams_ur5_push_msgs::Push& push)
   {
     double dim_z = shape_.dimensions[2];
     // Pose height is related to box height and tip length

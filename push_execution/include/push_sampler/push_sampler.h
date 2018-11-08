@@ -5,8 +5,8 @@
 #include <shape_msgs/SolidPrimitive.h>
 
 
-#include <tams_ur5_push_execution/Push.h>
-#include <tams_ur5_push_execution/PushApproach.h>
+#include <tams_ur5_push_msgs/Push.h>
+#include <tams_ur5_push_msgs/PushApproach.h>
 
 #pragma once
 
@@ -26,8 +26,8 @@ namespace push_sampler
       bool setObject(const shape_msgs::SolidPrimitive& shape);
 
 
-      virtual bool sampleRandomPush(tams_ur5_push_execution::Push& push) const;
-      bool sampleRandomPushApproach(tams_ur5_push_execution::PushApproach& approach) const;
+      virtual bool sampleRandomPush(tams_ur5_push_msgs::Push& push) const;
+      bool sampleRandomPushApproach(tams_ur5_push_msgs::PushApproach& approach) const;
 
 
       // constrained sampling

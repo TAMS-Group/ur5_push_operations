@@ -40,11 +40,11 @@
 #include <push_execution/pusher.h>
 #include <push_execution/push_execution.h>
 
-#include <tams_ur5_push_execution/Push.h>
-#include <tams_ur5_push_execution/PusherMovement.h>
-#include <tams_ur5_push_execution/SamplePredictivePush.h>
+#include <tams_ur5_push_msgs/Push.h>
+#include <tams_ur5_push_msgs/PusherMovement.h>
+#include <tams_ur5_push_msgs/SamplePredictivePush.h>
 
-#include <tams_ur5_push_execution/ExecutePush.h>
+#include <tams_ur5_push_msgs/ExecutePush.h>
 
 
 namespace push_execution {
@@ -55,8 +55,8 @@ class PushExecutionServer {
     PushExecution* push_execution_;
     Pusher pusher_;
 
-    actionlib::SimpleActionServer<tams_ur5_push_execution::ExplorePushesAction> explore_pushes_server_;
-    actionlib::SimpleActionServer<tams_ur5_push_execution::MoveObjectAction> move_object_server_;
+    actionlib::SimpleActionServer<tams_ur5_push_msgs::ExplorePushesAction> explore_pushes_server_;
+    actionlib::SimpleActionServer<tams_ur5_push_msgs::MoveObjectAction> move_object_server_;
 
     ros::ServiceServer point_service_;
     ros::ServiceServer push_execution_service_;
@@ -78,13 +78,13 @@ class PushExecutionServer {
       return true;
     }
 
-    bool pointAtBox(tams_ur5_push_execution::PusherMovement::Request& req, tams_ur5_push_execution::PusherMovement::Response& res)
+    bool pointAtBox(tams_ur5_push_msgs::PusherMovement::Request& req, tams_ur5_push_msgs::PusherMovement::Response& res)
     {
       res.success = isPusherAvailable() && push_execution_->pointAtBox(pusher_);
       return true;
     }
 
-    bool executePush(tams_ur5_push_execution::ExecutePush::Request& req, tams_ur5_push_execution::ExecutePush::Response& res)
+    bool executePush(tams_ur5_push_msgs::ExecutePush::Request& req, tams_ur5_push_msgs::ExecutePush::Response& res)
     {
       ROS_INFO_STREAM("Received push request" << req);
       res.result = false;
@@ -100,9 +100,9 @@ class PushExecutionServer {
 
     void acceptExplorePushesGoal()
     {
-      tams_ur5_push_execution::ExplorePushesGoal goal = (*explore_pushes_server_.acceptNewGoal());
-      tams_ur5_push_execution::ExplorePushesFeedback feedback;
-      tams_ur5_push_execution::ExplorePushesResult result;
+      tams_ur5_push_msgs::ExplorePushesGoal goal = (*explore_pushes_server_.acceptNewGoal());
+      tams_ur5_push_msgs::ExplorePushesFeedback feedback;
+      tams_ur5_push_msgs::ExplorePushesResult result;
       result.attempts = 0;
       ros::Time start_time = ros::Time::now();
       int success = true;
@@ -158,9 +158,9 @@ class PushExecutionServer {
 
     void acceptMoveObjectGoal()
     {
-      tams_ur5_push_execution::MoveObjectGoal goal = (*move_object_server_.acceptNewGoal());
-      tams_ur5_push_execution::MoveObjectFeedback feedback;
-      tams_ur5_push_execution::MoveObjectResult result;
+      tams_ur5_push_msgs::MoveObjectGoal goal = (*move_object_server_.acceptNewGoal());
+      tams_ur5_push_msgs::MoveObjectFeedback feedback;
+      tams_ur5_push_msgs::MoveObjectResult result;
       result.attempts = 0;
       ros::Time start_time = ros::Time::now();
       int success = true;
@@ -209,7 +209,7 @@ class PushExecutionServer {
           result.attempts++;
           id_count_++;
 
-          tams_ur5_push_execution::Push push;
+          tams_ur5_push_msgs::Push push;
           if(!getNextPush(goal, push)) {
             ROS_ERROR("Could not sample push for some reason!");
             failed_in_a_row++;
@@ -245,7 +245,7 @@ class PushExecutionServer {
       service_busy_ = false;
     }
 
-    bool goalReached(tams_ur5_push_execution::MoveObjectGoal& goal) {
+    bool goalReached(tams_ur5_push_msgs::MoveObjectGoal& goal) {
       geometry_msgs::Pose obj_pose = push_execution_->getObjectPose(goal.object_id);
       double x_diff = obj_pose.position.x - goal.target.position.x;
       double y_diff = obj_pose.position.y - goal.target.position.y;
@@ -262,7 +262,7 @@ class PushExecutionServer {
     }
 
 
-    double getGoalTargetError(tams_ur5_push_execution::MoveObjectGoal& goal) {
+    double getGoalTargetError(tams_ur5_push_msgs::MoveObjectGoal& goal) {
       return getObjectTargetError(push_execution_->getObjectPose(goal.object_id), goal.target);
     }
 
@@ -288,8 +288,8 @@ class PushExecutionServer {
     /*
      * Calls the push sampler service to query a new push
      */
-    bool getNextPush(tams_ur5_push_execution::MoveObjectGoal& goal, tams_ur5_push_execution::Push& push) {
-      tams_ur5_push_execution::SamplePredictivePush srv;
+    bool getNextPush(tams_ur5_push_msgs::MoveObjectGoal& goal, tams_ur5_push_msgs::Push& push) {
+      tams_ur5_push_msgs::SamplePredictivePush srv;
       srv.request.object_id = goal.object_id;
       srv.request.object_pose = push_execution_->getObjectPose(goal.object_id);
       srv.request.target = goal.target;
@@ -307,7 +307,7 @@ class PushExecutionServer {
     pnh.param("execute", execute_, false);
     point_service_ = nh.advertiseService("point_at_box", &PushExecutionServer::pointAtBox, this);
     push_execution_service_ = nh.advertiseService("push_execution", &PushExecutionServer::executePush, this);
-    push_sampler_= nh.serviceClient<tams_ur5_push_execution::SamplePredictivePush>("predictive_push_sampler");
+    push_sampler_= nh.serviceClient<tams_ur5_push_msgs::SamplePredictivePush>("predictive_push_sampler");
 
     isPusherAvailable();
     push_execution_ = new PushExecution();

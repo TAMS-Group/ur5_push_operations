@@ -48,7 +48,7 @@
 #include <geometry_msgs/Pose.h>
 
 // pushing
-#include <tams_ur5_push_execution/Push.h>
+#include <tams_ur5_push_msgs/Push.h>
 #include <push_sampler/push_sampler.h>
 
 #pragma once
@@ -57,7 +57,7 @@ const double dimX = 0.162;
 const double dimY = 0.23;
 const double dimZ = 0.112;
 
-void convertControlToPush(const oc::Control *control, tams_ur5_push_execution::Push& push) {
+void convertControlToPush(const oc::Control *control, tams_ur5_push_msgs::Push& push) {
   const double* ctrl = control->as<oc::RealVectorControlSpace::ControlType>()->values;
   //retrieve approach point from pivot and box dimensions
   geometry_msgs::Pose pose = push_sampler::PushSampler::getPoseFromBoxBorder(ctrl[0], dimX, dimY, dimZ);
@@ -89,7 +89,7 @@ void convertStateToPose(const ob::State *state, geometry_msgs::Pose& pose) {
 }
 
 
-void controlPathToPushTrajectoryMsg(const ompl::control::PathControl& solution, tams_ur5_push_execution::PushTrajectory& traj_msg) {
+void controlPathToPushTrajectoryMsg(const ompl::control::PathControl& solution, tams_ur5_push_msgs::PushTrajectory& traj_msg) {
   traj_msg.steps = solution.getStateCount();
   traj_msg.poses.resize(traj_msg.steps);
   traj_msg.pushes.resize(solution.getControlCount());

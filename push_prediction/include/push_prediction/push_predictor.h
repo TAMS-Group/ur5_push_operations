@@ -1,7 +1,7 @@
 #pragma once
 
 #include <ros/package.h>
-#include <tams_ur5_push_execution/Push.h>
+#include <tams_ur5_push_msgs/Push.h>
 #include <geometry_msgs/Pose.h>
 #include <push_prediction/neural_network.h>
 #include <tf/transform_datatypes.h>
@@ -19,12 +19,12 @@ namespace push_prediction {
             NeuralNetwork network_;
             bool reuseSolutions_ = false;
             
-            tams_ur5_push_execution::Push last_push;
+            tams_ur5_push_msgs::Push last_push;
             geometry_msgs::Pose last_pose;
 
 
         protected:
-            void normalizePushInput(const tams_ur5_push_execution::Push& push, Eigen::VectorXf& input_vec) const;
+            void normalizePushInput(const tams_ur5_push_msgs::Push& push, Eigen::VectorXf& input_vec) const;
 
             void denormalizePoseOutput(Eigen::VectorXf output_vec, geometry_msgs::Pose& pose) const;
         public:
@@ -32,7 +32,7 @@ namespace push_prediction {
 
             void setReuseSolutions(bool reuseSolutions);
 
-            bool pushesEqual(const tams_ur5_push_execution::Push& first, const tams_ur5_push_execution::Push& second) {
+            bool pushesEqual(const tams_ur5_push_msgs::Push& first, const tams_ur5_push_msgs::Push& second) {
                 return first.approach.point.x == second.approach.point.x 
                     && first.approach.point.y == second.approach.point.y
                     && first.approach.normal.w == second.approach.normal.w
@@ -43,6 +43,6 @@ namespace push_prediction {
                     && first.distance == second.distance;
             }
 
-            bool predict(const tams_ur5_push_execution::Push& push, geometry_msgs::Pose& pose);
+            bool predict(const tams_ur5_push_msgs::Push& push, geometry_msgs::Pose& pose);
     };
 }

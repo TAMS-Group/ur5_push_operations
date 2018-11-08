@@ -69,8 +69,8 @@
 
 
 // pushing
-#include <tams_ur5_push_execution/Push.h>
-#include <tams_ur5_push_execution/PushTrajectory.h>
+#include <tams_ur5_push_msgs/Push.h>
+#include <tams_ur5_push_msgs/PushTrajectory.h>
 #include <push_planning/PushPlanAction.h>
 
 #include <push_planning/chained_control_sampler.h>
@@ -87,7 +87,7 @@ ros::Publisher traj_pub_, graph_pub_;
 
 void publishPushTrajectory(const ompl::control::PathControl& solution) 
 {
-  tams_ur5_push_execution::PushTrajectory traj_msg;
+  tams_ur5_push_msgs::PushTrajectory traj_msg;
   controlPathToPushTrajectoryMsg(solution, traj_msg);
   traj_pub_.publish(traj_msg);
 }

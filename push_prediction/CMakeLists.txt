@@ -8,7 +8,7 @@ find_package(catkin REQUIRED COMPONENTS
 	roslib
 	geometry_msgs
 	tf
-	tams_ur5_push_execution
+	tams_ur5_push_msgs
 	eigen_conversions)
 
 find_package(Eigen3 REQUIRED)

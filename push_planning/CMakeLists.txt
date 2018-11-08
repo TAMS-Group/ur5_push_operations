@@ -8,6 +8,7 @@ find_package(catkin REQUIRED COMPONENTS
     graph_msgs
     tf
     actionlib
+    tams_ur5_push_msgs
     tams_ur5_push_execution
     geometry_msgs
     eigen_conversions
@@ -28,7 +29,7 @@ generate_messages(
     geometry_msgs
     actionlib_msgs
     graph_msgs
-    tams_ur5_push_execution)
+    tams_ur5_push_msgs)
 
 ## System dependencies are found with CMake's conventions
 find_package(ompl REQUIRED)

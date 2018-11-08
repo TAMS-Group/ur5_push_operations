@@ -3,7 +3,7 @@
 
 namespace push_prediction {
 
-    void PushPredictor::normalizePushInput(const tams_ur5_push_execution::Push& push, Eigen::VectorXf& input_vec) const
+    void PushPredictor::normalizePushInput(const tams_ur5_push_msgs::Push& push, Eigen::VectorXf& input_vec) const
     {
         input_vec.resize(4);
         input_vec(0) =  (0.081 + push.approach.point.x ) / 0.162;
@@ -33,7 +33,7 @@ namespace push_prediction {
         reuseSolutions_ = reuseSolutions;
     }
 
-    bool PushPredictor::predict(const tams_ur5_push_execution::Push& push, geometry_msgs::Pose& pose) {
+    bool PushPredictor::predict(const tams_ur5_push_msgs::Push& push, geometry_msgs::Pose& pose) {
 
         // reuse last solution if request is the same
         if(reuseSolutions_ && pushesEqual(push, last_push)) {
@@ -78,7 +78,7 @@ namespace push_prediction {
 int main(int argc, char** argv)
 {
     push_prediction::PushPredictor predictor;
-    tams_ur5_push_execution::Push push;
+    tams_ur5_push_msgs::Push push;
     push.approach.point.x = -0.081;
     push.approach.point.y = -0.05;
     push.approach.normal.w = 1.0;

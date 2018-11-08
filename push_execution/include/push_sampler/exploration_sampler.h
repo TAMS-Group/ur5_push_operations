@@ -58,8 +58,8 @@ namespace push_sampler
       void setObjectFrame(const std::string& object_frame) { object_frame_ = object_frame; };
       void setObjectPose(const geometry_msgs::Pose pose) { object_pose_ = pose; };
 
-      bool sampleRandomPush(tams_ur5_push_execution::Push& push);
-      void adjustContactHeight(tams_ur5_push_execution::Push& push);
+      bool sampleRandomPush(tams_ur5_push_msgs::Push& push);
+      void adjustContactHeight(tams_ur5_push_msgs::Push& push);
 
       void setAttemptCount(int attempts) { attempts_ = attempts; };
 
@@ -79,6 +79,6 @@ namespace push_sampler
 
       int attempts_ = 100;
 
-      bool sampleSafePushApproach(tams_ur5_push_execution::PushApproach& approach, int attempts);
+      bool sampleSafePushApproach(tams_ur5_push_msgs::PushApproach& approach, int attempts);
   };
 }

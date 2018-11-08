@@ -85,7 +85,7 @@ namespace push_planning {
       const double yaw = se2state->getYaw();
 
 
-      tams_ur5_push_execution::PredictPush msg;
+      tams_ur5_push_msgs::PredictPush msg;
       msg.request.control.push_back(ctrl[0]);
       msg.request.control.push_back(ctrl[1]);
       msg.request.control.push_back(ctrl[2]);
@@ -129,7 +129,7 @@ namespace push_planning {
         const double y = se2state->getY();
         const double yaw = se2state->getYaw();
 
-        tams_ur5_push_execution::Push push;
+        tams_ur5_push_msgs::Push push;
         convertControlToPush(control, push);
         if(set_distance_from_duration_)
           push.distance = duration;
@@ -194,7 +194,7 @@ namespace push_planning {
         se2StateToEigen(goal, goal_pose);
 
         // temp variables
-        tams_ur5_push_execution::Push push;
+        tams_ur5_push_msgs::Push push;
         geometry_msgs::Pose pose;
 
         const double goal_distance = si_->distance(start, goal);
@@ -248,7 +248,7 @@ namespace push_planning {
         se2StateToEigen(goal, goal_pose);
 
         // temp variables
-        tams_ur5_push_execution::Push push;
+        tams_ur5_push_msgs::Push push;
         geometry_msgs::Pose pose;
 
         const double goal_threshold = 0.05;
@@ -295,7 +295,7 @@ namespace push_planning {
        * and cartesian distance (1.0).
        bool steer(const ob::State *start, const ob::State *to, oc::Control *control, double& duration) const override
        {
-       tams_ur5_push_execution::SteerPush msg;
+       tams_ur5_push_msgs::SteerPush msg;
        convertStateToPose(start, msg.request.start);
        convertStateToPose(to, msg.request.goal);
        steer_predictor_->call(msg);

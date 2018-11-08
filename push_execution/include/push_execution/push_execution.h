@@ -58,10 +58,10 @@
 #include <push_execution/pusher.h>
 #include <push_sampler/exploration_sampler.h>
 
-#include <tams_ur5_push_execution/ExplorePushesAction.h>
-#include <tams_ur5_push_execution/MoveObjectAction.h>
-#include <tams_ur5_push_execution/Push.h>
-#include <tams_ur5_push_execution/PushApproach.h>
+#include <tams_ur5_push_msgs/ExplorePushesAction.h>
+#include <tams_ur5_push_msgs/MoveObjectAction.h>
+#include <tams_ur5_push_msgs/Push.h>
+#include <tams_ur5_push_msgs/PushApproach.h>
 
 #include <std_msgs/Float64.h>
 
@@ -132,7 +132,7 @@ namespace push_execution
             }
 
             bool performRandomPush(push_execution::Pusher& pusher, bool execute_plan=false) {
-              tams_ur5_push_execution::ExplorePushesFeedback fb;
+              tams_ur5_push_msgs::ExplorePushesFeedback fb;
                 return performRandomPush(pusher, fb, execute_plan);
             }
 
@@ -146,9 +146,9 @@ namespace push_execution
             }
 
 
-            bool performRandomPush(Pusher& pusher, tams_ur5_push_execution::ExplorePushesFeedback& feedback, bool execute_plan=true) 
+            bool performRandomPush(Pusher& pusher, tams_ur5_push_msgs::ExplorePushesFeedback& feedback, bool execute_plan=true) 
             {
-              tams_ur5_push_execution::Push push;
+              tams_ur5_push_msgs::Push push;
                 ros::Duration(0.5).sleep();
                 if (isObjectClear() && createRandomPushMsg(push)) {
                     feedback.push = push;
@@ -162,7 +162,7 @@ namespace push_execution
                 }
             }
 
-            bool performPush(Pusher& pusher, const tams_ur5_push_execution::Push& push, tams_ur5_push_execution::MoveObjectFeedback& feedback, bool execute_plan=true) 
+            bool performPush(Pusher& pusher, const tams_ur5_push_msgs::Push& push, tams_ur5_push_msgs::MoveObjectFeedback& feedback, bool execute_plan=true) 
             {
                 ros::Duration(0.5).sleep();
                 if (isObjectClear()) {
@@ -177,7 +177,7 @@ namespace push_execution
                 }
             }
 
-            bool performPush(Pusher& pusher, const tams_ur5_push_execution::Push& push, int attempt_id, bool execute_plan=true) 
+            bool performPush(Pusher& pusher, const tams_ur5_push_msgs::Push& push, int attempt_id, bool execute_plan=true) 
             {
                 if(isObjectClear()) {
 
@@ -414,8 +414,8 @@ namespace push_execution
                 psi_.removeCollisionObjects(object_ids);
             }
 
-            bool createRandomPushMsg(tams_ur5_push_execution::Push& push) {
-                push.mode = tams_ur5_push_execution::Push::LINEAR;
+            bool createRandomPushMsg(tams_ur5_push_msgs::Push& push) {
+                push.mode = tams_ur5_push_msgs::Push::LINEAR;
                 push_sampler_.setObject(marker_);
                 push_sampler_.setObjectPose(marker_.pose);
 
@@ -451,7 +451,7 @@ namespace push_execution
                 return constraints;
             }
 
-            void visualizePushApproach(const tams_ur5_push_execution::PushApproach& approach) {
+            void visualizePushApproach(const tams_ur5_push_msgs::PushApproach& approach) {
                 geometry_msgs::Pose pose;
                 pose.position = approach.point;
                 pose.orientation = approach.normal;
@@ -494,7 +494,7 @@ namespace push_execution
 
 
 
-            bool getPushWaypoints(const tams_ur5_push_execution::Push& push, std::vector<std::vector<geometry_msgs::Pose>>& waypoints, std::vector<double>& wp_distances) {
+            bool getPushWaypoints(const tams_ur5_push_msgs::Push& push, std::vector<std::vector<geometry_msgs::Pose>>& waypoints, std::vector<double>& wp_distances) {
 
                 // object pose
                 geometry_msgs::PoseStamped obj_pose;
