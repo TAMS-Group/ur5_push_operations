@@ -20,6 +20,8 @@
 	<build_depend>control_msgs</build_depend>
 	<build_depend>geometry_msgs</build_depend>
 	<build_depend>visualization_msgs</build_depend>
+	<build_depend>tams_ur5_push_msgs</build_depend>
+	<build_depend>tams_ur5_pushing_object_localization</build_depend>
 	<build_depend>message_generation</build_depend>
 	<run_depend>roscpp</run_depend>
 	<run_depend>actionlib</run_depend>
@@ -30,6 +32,8 @@
 	<run_depend>moveit_ros_planning</run_depend>
 	<run_depend>tams_ur5_push_msgs</run_depend>
 	<run_depend>moveit_ros_planning_interface</run_depend>
+	<run_depend>tams_ur5_push_msgs</run_depend>
+	<run_depend>tams_ur5_pushing_object_localization</run_depend>
 	<run_depend>std_msgs</run_depend>
 	<run_depend>control_msgs</run_depend>
 	<run_depend>geometry_msgs</run_depend>

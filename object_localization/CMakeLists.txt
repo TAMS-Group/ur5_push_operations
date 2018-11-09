@@ -14,6 +14,8 @@ find_package(catkin REQUIRED COMPONENTS
     cv_bridge
 )
 
+catkin_package(INCLUDE_DIRS)
+
 include_directories(
 # include
  ${catkin_INCLUDE_DIRS}
