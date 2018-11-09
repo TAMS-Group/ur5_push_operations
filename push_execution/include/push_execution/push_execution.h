@@ -417,6 +417,7 @@ namespace push_execution
                 push.mode = push_msgs::Push::LINEAR;
                 push_sampler_.setObject(marker_);
                 push_sampler_.setObjectPose(marker_.pose);
+                push_sampler_.setObjectFrame(marker_.header.frame_id);
 
                 if(push_sampler_.sampleRandomPush(push))
                 {

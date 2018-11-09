@@ -49,6 +49,7 @@ namespace push_sampler
     if(!sampleSafePushApproach(push.approach, attempts_))
       return false;
 
+    push.approach.frame_id = object_frame_;
     push.distance = sampleRandomPushDistance();
     adjustContactHeight(push);
     return true;
