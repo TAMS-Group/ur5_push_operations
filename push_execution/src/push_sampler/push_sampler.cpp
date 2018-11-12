@@ -49,9 +49,9 @@ namespace push_sampler
 
     shape_.type = shape_msgs::SolidPrimitive::BOX;
     shape_.dimensions.resize(3);
-    shape_.dimensions.push_back(marker.scale.x);
-    shape_.dimensions.push_back(marker.scale.y);
-    shape_.dimensions.push_back(marker.scale.z);
+    shape_.dimensions[0] = marker.scale.x;
+    shape_.dimensions[1] = marker.scale.y;
+    shape_.dimensions[2] = marker.scale.z;
     object_ready_ = true;
     return true;
   }
@@ -91,8 +91,10 @@ namespace push_sampler
   {
     if(!object_ready_) return false;
 
-    geometry_msgs::Pose approach_pose = sampleRandomPoseFromBox(shape_.dimensions[0],
-          shape_.dimensions[1], shape_.dimensions[2]);
+    geometry_msgs::Pose approach_pose =
+      sampleRandomPoseFromBox(shape_.dimensions[0],
+                              shape_.dimensions[1],
+                              shape_.dimensions[2]);
     approach.point = approach_pose.position;
     approach.normal = approach_pose.orientation;
     approach.angle = sampleRandomPushAngle();
