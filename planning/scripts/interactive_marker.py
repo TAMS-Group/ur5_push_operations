@@ -11,7 +11,7 @@ import actionlib
 from tams_ur5_push_msgs.srv import ExecutePush, ExecutePushRequest, ExecutePushResponse
 from tams_ur5_push_msgs.msg import PlanPushAction, PlanPushGoal
 from tams_ur5_push_msgs.msg import MoveObjectAction, MoveObjectGoal, MoveObjectResult
-import push_planner_visualization as ppv
+from plan_visualization import PlanVisualization
 
 
 from interactive_markers.interactive_marker_server import *
@@ -113,7 +113,7 @@ def makePlanarIntMarker( name, active = True):
     menu_handler.apply( server, int_marker.name )
 
 def call_push_plan_action(object_id, start_pose, goal_pose):
-    global planner_client, last_solution
+    global planner_client, last_solution, plan_viz
 
     #create goal
     goal = PlanPushGoal()
@@ -132,8 +132,8 @@ def call_push_plan_action(object_id, start_pose, goal_pose):
     result = planner_client.get_result()
     last_solution = result
 
-    ppv.visualize_object_trajectory(result.trajectory)
-    ppv.visualize_planner_data(result.planner_data)
+    plan_viz.visualize_trajectory(result.trajectory)
+    plan_viz.visualize_graph(result.planner_data)
     return result
 
 
@@ -163,7 +163,7 @@ def get_object_pose(object_frame, reference_frame):
 # Callbacks
 
 def onMove( feedback ):
-    global highlight_solution, interactive_start_state
+    global highlight_solution, interactive_start_state, plan_viz
     event = feedback.event_type
     name = feedback.marker_name
 
@@ -174,7 +174,7 @@ def onMove( feedback ):
     if event == feedback.MOUSE_DOWN:
         # if solution is highlighted and markers are hidden - show them again
         if highlight_solution:
-            ppv.remove_all_markers()
+            plan_viz.remove_all_markers()
             highlight_solution = False
             reset_markers(True)
 
@@ -277,7 +277,7 @@ def se2Distance(p1, p2):
 #        client.wait_for_result()
 
 def init_interaction_server():
-    global planner_client, highlight_solution, interactive_start_state
+    global planner_client, highlight_solution, interactive_start_state, plan_viz
 
     highlight_solution = False
     menu_handler.insert( "Plan", callback=onPlan )
@@ -297,7 +297,7 @@ def init_interaction_server():
 
     reset_markers(True)
 
-    ppv.init_publishers()
+    plan_viz = PlanVisualization();
 
     planner_client = actionlib.SimpleActionClient('/push_plan_action', PlanPushAction)
 
