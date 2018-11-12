@@ -18,6 +18,7 @@ class PlanVisualization:
         self.marker_pub = rospy.Publisher("/push_planner_graph_markers", Marker, queue_size=1)
 
         self.object_marker = object_marker
+        self.object_marker.action = Marker.ADD
         self.v_offset = v_offset
 
     # visualize trajectory as graph

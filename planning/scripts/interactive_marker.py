@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import copy
+from copy import copy
 
 import rospy
 import tf
@@ -21,129 +21,28 @@ from geometry_msgs.msg import Point, Pose, Quaternion, Vector3
 from std_msgs.msg import ColorRGBA
 
 
-menu_handler = MenuHandler()
-server = None
-
 dim_X = 0.162
 dim_Y = 0.23
 dim_Z = 0.112
 
-reference_frame = "table_top"
-object_frame = "pushable_object_0"
-
 START = "start pose"
 GOAL= "goal pose"
 
-poses = { START: Pose(Point(-0.2, -0.2, 0.0), Quaternion(0.0, 0.0, 0.0, 1.0)),
-          GOAL: Pose(Point(0.2, 0.2, 0.0), Quaternion(0.0, 0.0, 0.0, 1.0)) }
 
-colors = { START: ColorRGBA(0.0,0.0,1.0,1.0),
-           GOAL: ColorRGBA(1.0,0.0,0.0,1.0) }
+def se2Distance(p1, p2):
+    p_dist = linalg_dist(p1, p2)
+    o_dist = abs(ch.get_yaw(p1) - ch.get_yaw(p2)) % (2 * pi)
+    o_dist = o_dist if o_dist < pi else 2 * pi - o_dist
+    return p_dist + 0.5 * o_dist
 
-
-# marker/control instatniation
-
-def getBox( dimX, dimY, dimZ, color=ColorRGBA(0.0,0.0,1.0,1.0) ):
+def get_object_marker():
     marker = Marker()
     marker.type = Marker.CUBE
-    marker.scale.x = dimX
-    marker.scale.y = dimY
-    marker.scale.z = dimZ
-    marker.color = color
-    return marker
+    marker.header.frame_id = "/table_top"
+    marker.scale = Vector3(dim_X, dim_Y, dim_Z)
+    marker.pose.position.z = 0.5 * dim_Z
+    return copy(marker)
 
-def makeBoxControl( msg, marker ):
-    control =  InteractiveMarkerControl()
-    control.always_visible = True
-    control.markers.append( marker )
-    msg.controls.append( control )
-    return control
-
-def makePlanarIntMarker( name, active = True):
-    marker = getBox(dim_X, dim_Y, dim_Z, colors[name])
-    marker.color.a = 1.0 if active else 0.1
-    int_marker = InteractiveMarker()
-    int_marker.header.frame_id = reference_frame
-    int_marker.pose = poses[name]
-    int_marker.pose.position.z = marker.scale.z * .5
-    int_marker.scale = 0.5
-
-    int_marker.name = name
-    int_marker.description = name
-
-    # insert a box
-    makeBoxControl(int_marker, marker)
-    int_marker.controls[0].interaction_mode = InteractiveMarkerControl.MOVE_PLANE
-    int_marker.controls[0].orientation.w = 1
-    int_marker.controls[0].orientation.x = 0
-    int_marker.controls[0].orientation.y = 1
-    int_marker.controls[0].orientation.z = 0
-    
-    if active: 
-
-        control = InteractiveMarkerControl()
-        control.orientation.w = 1
-        control.orientation.x = 0
-        control.orientation.y = 1
-        control.orientation.z = 0
-        control.name = "rotate_z"
-        control.interaction_mode = InteractiveMarkerControl.ROTATE_AXIS
-        int_marker.controls.append(control)
-
-        control = InteractiveMarkerControl()
-        control.orientation.w = 1
-        control.orientation.x = 1
-        control.orientation.y = 0
-        control.orientation.z = 0
-        control.name = "move_x"
-        control.interaction_mode = InteractiveMarkerControl.MOVE_AXIS
-        int_marker.controls.append(control)
-
-        control = InteractiveMarkerControl()
-        control.orientation.w = 1
-        control.orientation.x = 0
-        control.orientation.y = 0
-        control.orientation.z = 1
-        control.name = "move_y"
-        control.interaction_mode = InteractiveMarkerControl.MOVE_AXIS
-        int_marker.controls.append(control)
-
-
-    server.insert(int_marker, onMove)
-    menu_handler.apply( server, int_marker.name )
-
-def call_push_plan_action(object_id, start_pose, goal_pose):
-    global planner_client, last_solution, plan_viz
-
-    #create goal
-    goal = PlanPushGoal()
-    goal.object_id = object_id
-    goal.start_pose = start_pose
-    goal.goal_pose = goal_pose
-
-    print start_pose, goal_pose
-
-    # call client
-    planner_client.wait_for_server()
-    planner_client.send_goal(goal)
-    planner_client.wait_for_result()
-
-    # receive result
-    result = planner_client.get_result()
-    last_solution = result
-
-    plan_viz.visualize_trajectory(result.trajectory)
-    plan_viz.visualize_graph(result.planner_data)
-    return result
-
-
-def reset_markers(active=True):
-    global interactive_start_state
-    if interactive_start_state:
-        makePlanarIntMarker( START, active)
-
-    makePlanarIntMarker( GOAL, active)
-    server.applyChanges()
 
 def get_object_pose(object_frame, reference_frame):
     pose = None
@@ -156,159 +55,261 @@ def get_object_pose(object_frame, reference_frame):
             pose = Pose(Point(*p), Quaternion(*q))
     except (tf.LookupException, tf.ConnectivityException):
         print "Unable to retrieve object pose!"
-
     return pose
 
 
-# Callbacks
+# interactive marker controls
+class InteractiveControls:
 
-def onMove( feedback ):
-    global highlight_solution, interactive_start_state, plan_viz
-    event = feedback.event_type
-    name = feedback.marker_name
-
-    if event == feedback.MOUSE_UP:
-        if(name == GOAL or ( interactive_start_state and name == START) ):
-            poses[name] = feedback.pose
-
-    if event == feedback.MOUSE_DOWN:
-        # if solution is highlighted and markers are hidden - show them again
-        if highlight_solution:
-            plan_viz.remove_all_markers()
-            highlight_solution = False
-            reset_markers(True)
+    def __init__(self,
+                 object_marker,
+                 interactive_start_state,
+                 server= None,
+                 menu_handler= None,
+                 on_move_callback= None,
+                 reference_frame = "table_top",
+                 start_pose= Pose(Point(-0.2, -0.2, 0.0), Quaternion(0.0, 0.0, 0.0, 1.0)),
+                 goal_pose= Pose(Point(0.2, 0.2, 0.0), Quaternion(0.0, 0.0, 0.0, 1.0)),
+                 start_color= ColorRGBA(0.0,0.0,1.0,1.0),
+                 goal_color= ColorRGBA(1.0,0.0,0.0,1.0)):
 
 
-def onPlan( feedback ):
-    global highlight_solution
-    print "plan"
+        self.server = InteractiveMarkerServer("push_object_controls") if server is None else server
+        self.object_marker = object_marker
+        self.reference_frame = reference_frame
+        self.interactive_start_state = interactive_start_state
+        self.poses = { START: start_pose, GOAL: goal_pose }
+        self.colors = { START: start_color, GOAL: goal_color }
 
-    # set start pose
-    start_pose = getStartPose()
+        self.menu_handler = menu_handler
+        self.on_move_callback = on_move_callback
 
-    # call action
-    call_push_plan_action("object_id", start_pose, poses[GOAL])
+        # set goal pose to object pose on start if start pose is not interactive
+        if not self.interactive_start_state:
+            pose = get_object_pose(object_frame, reference_frame)
+            if pose is not None:
+                self.poses[GOAL] = pose
+            else:
+                print "Error! Object pose could not be found"
 
-    # hide markers
-    highlight_solution = True
-    reset_markers(False)
+    def set_menu_handler(self, menu_handler):
+        self.menu_handler = menu_handler
+
+    def set_on_move_callback(self, callback):
+        self.on_move_callback = callback
+
+    def create_interactive_marker(self, name, active = True):
+        # retrieve pushable object marker
+        marker = copy(self.object_marker)
+        marker.header.frame_id = ""
+        marker.color = self.colors[name]
+        marker.color.a = 1.0 if active else 0.1
+
+        # create interactive marker
+        int_marker = InteractiveMarker()
+        int_marker.name = name
+        int_marker.description = name
+        int_marker.header.frame_id = self.reference_frame
+        int_marker.scale = 0.5
+        int_marker.pose = self.poses[name]
+        int_marker.pose.position.z = marker.pose.position.z
+        marker.pose = Pose(Point(0,0,0), Quaternion(0,0,0,1))
+
+        # Create a controllable marker
+        control = InteractiveMarkerControl( always_visible=True )
+        control.interaction_mode = InteractiveMarkerControl.MOVE_PLANE
+        control.orientation = Quaternion(0,1,0,1)
+        control.markers.append( marker )
+        int_marker.controls.append( control )
+
+        # if active show interaction arrows
+        if active:
+
+            control = InteractiveMarkerControl( name="rotate_z" )
+            control.interaction_mode = InteractiveMarkerControl.ROTATE_AXIS
+            control.orientation=Quaternion(0,1,0,1)
+            int_marker.controls.append(control)
+
+            control = InteractiveMarkerControl( name="move_x" )
+            control.interaction_mode = InteractiveMarkerControl.MOVE_AXIS
+            control.orientation = Quaternion(0,0,1,1)
+            int_marker.controls.append(control)
+
+            control = InteractiveMarkerControl( name="move_y" )
+            control.interaction_mode = InteractiveMarkerControl.MOVE_AXIS
+            control.orientation = Quaternion(1,0,0,1)
+            int_marker.controls.append(control)
+
+        # register marker and move event callback
+        self.server.insert(int_marker, self.on_move_cb)
+
+        # apply context menu to marker
+        if self.menu_handler is not None:
+            self.menu_handler.apply( self.server, int_marker.name )
+
+    def get_start_pose(self):
+        if not self.interactive_start_state:
+            pose = get_object_pose(object_frame, reference_frame)
+            if pose is not None:
+                self.poses[START] = pose
+        return self.poses[START]
+
+    def get_goal_pose(self):
+        return self.poses[GOAL]
+
+    def reset_markers(self, active=True):
+        if self.interactive_start_state:
+            self.create_interactive_marker( START, active)
+
+        self.create_interactive_marker( GOAL, active)
+        self.server.applyChanges()
 
 
-def onReset( feedback ):
-    global highlight_solution
-    print "reset"
-    highlight_solution = False
-    reset_markers(True)
+    def on_move_cb(self, feedback):
+        if feedback.event_type == feedback.MOUSE_UP:
+            name = feedback.marker_name
+            if name in self.poses:
+                if self.interactive_start_state or name == GOAL:
+                    self.poses[name] = feedback.pose
+
+        if self.on_move_callback is not None:
+            self.on_move_callback(feedback)
 
 
-def onExecute( feedback ):
-    global last_solution
-    print "execute"
-    rospy.wait_for_service("push_execution")
-    print "found service"
-    execute_push = rospy.ServiceProxy("push_execution", ExecutePush)
-    for push in last_solution.trajectory.pushes:
-        push.approach.frame_id = object_frame
-        print "execute push", push
-        try:
-            resp = execute_push(push)
-            if not resp.result:
-                break
-        except rospy.ServiceException as e:
-            print("Service did not process request: " + str(e))
-            break
+# Menu and interaction event handler
 
-def onRunMPC( feedback ):
-    print "run mpc"
-    rospy.wait_for_service("push_execution")
-    print "found service"
-    execute_push = rospy.ServiceProxy("push_execution", ExecutePush)
-    current_pose = getStartPose()
-    failed_attempts = 0
-    while se2Distance(current_pose, goal) > 0.05 and failed_attempts < 10:
-        # set current pose
-        current_pose = getStartPose()
+class EventHandler:
+
+    def __init__(self, controls, plan_viz):
+        self.highlight_solution = False
+        self.plan_viz = plan_viz
+
+        self.menu_handler = MenuHandler()
+        self.menu_handler.insert( "Plan", callback=self.onPlan )
+        self.menu_handler.insert( "Reset", callback=self.onReset )
+        self.menu_handler.insert( "Execute", callback=self.onExecute )
+        self.menu_handler.insert( "Run MPC", callback=self.onRunMPC )
+
+        self.controls = controls
+        self.controls.set_menu_handler(self.menu_handler)
+        self.controls.set_on_move_callback( self.onMove )
+        self.controls.reset_markers(True)
+
+        self.planner_client = actionlib.SimpleActionClient('/push_plan_action', PlanPushAction)
+
+
+    def onMove(self, feedback ):
+        if feedback.event_type == feedback.MOUSE_DOWN:
+            # if solution is highlighted and markers are hidden - show them again
+            if self.highlight_solution:
+                self.plan_viz.remove_all_markers()
+                self.highlight_solution = False
+                self.controls.reset_markers(True)
+
+    def onPlan( self, feedback ):
+        print "plan"
+        # get start and goal poses
+        start_pose = self.controls.get_start_pose()
+        goal_pose = self.controls.get_goal_pose()
 
         # call action
-        plan = call_push_plan_action("object_id", current_pose, poses[GOAL])
-        push = plan.trajectory.pushes[0]
-        push.approach.frame_id = object_frame
+        self.solution = self.call_push_plan_action("object_id", start_pose, goal_pose)
 
         # hide markers
-        highlight_solution = True
-        reset_markers(False)
+        self.highlight_solution = True
+        self.controls.reset_markers(False)
 
-        print "execute push", push
-        try:
-            resp = execute_push(push)
-            if not resp.result:
+    def onReset( self, feedback ):
+        print "reset"
+        self.highlight_solution = False
+        self.controls.reset_markers(True)
+
+    def onExecute( self, feedback ):
+        print "execute"
+        rospy.wait_for_service("push_execution")
+        print "found service"
+        execute_push = rospy.ServiceProxy("push_execution", ExecutePush)
+        for push in self.solution.trajectory.pushes:
+            push.approach.frame_id = object_frame
+            print "execute push", push
+            try:
+                resp = execute_push(push)
+                if not resp.result:
+                    break
+            except rospy.ServiceException as e:
+                print("Service did not process request: " + str(e))
+                break
+
+    def onRunMPC( feedback ):
+        print "run mpc"
+        rospy.wait_for_service("push_execution")
+        print "found service"
+        execute_push = rospy.ServiceProxy("push_execution", ExecutePush)
+        current_pose = self.controls.get_start_pose()
+        goal_pose = self.controls.get_goal_pose()
+        failed_attempts = 0
+        while se2Distance(current_pose, goal) > 0.05 and failed_attempts < 10:
+            # set current pose
+            current_pose = self.controls.get_start_pose()
+
+            # call action
+            plan = self.call_push_plan_action("object_id", current_pose, goal_pose)
+            push = plan.trajectory.pushes[0]
+            push.approach.frame_id = object_frame
+
+            # hide markers
+            self.highlight_solution = True
+            self.controls.reset_markers(False)
+
+            print "execute push", push
+            try:
+                resp = execute_push(push)
+                if not resp.result:
+                    failed_attempts += 1
+                    continue
+            except rospy.ServiceException as e:
+                print("Service did not process request: " + str(e))
                 failed_attempts += 1
                 continue
-        except rospy.ServiceException as e:
-            print("Service did not process request: " + str(e))
-            failed_attempts += 1
-            continue
 
-        failed_attempts = 0
+            failed_attempts = 0
 
-def getStartPose():
-    global interactive_start_state
-    start_pose = poses[START]
-    if not interactive_start_state:
-        pose = get_object_pose(object_frame, reference_frame)
-        if pose is not None:
-            start_pose = pose
-    return start_pose
+    def call_push_plan_action(self, object_id, start_pose, goal_pose):
 
-def se2Distance(p1, p2):
-    p_dist = linalg_dist(p1, p2)
-    o_dist = abs(ch.get_yaw(p1) - ch.get_yaw(p2)) % (2 * pi)
-    o_dist = o_dist if o_dist < pi else 2 * pi - o_dist
-    return p_dist + 0.5 * o_dist
+        #create goal
+        goal = PlanPushGoal()
+        goal.object_id = object_id
+        goal.start_pose = start_pose
+        goal.goal_pose = goal_pose
 
+        print start_pose, goal_pose
 
-#def onExecute( feedback ):
-#    global last_solution
-#    client = actionlib.SimpleActionClient("move_object_action", MoveObjectAction)
-#    client.wait_for_server()
-#    for pose in last_solution.trajectory.poses:
-#        goal = MoveObjectGoal(object_id=object_frame, target=pose)
-#        client.send_goal(goal)
-#        client.wait_for_result()
+        # call client
+        self.planner_client.wait_for_server()
+        self.planner_client.send_goal(goal)
+        self.planner_client.wait_for_result()
 
-def init_interaction_server():
-    global planner_client, highlight_solution, interactive_start_state, plan_viz
+        # receive result
+        result = self.planner_client.get_result()
 
-    highlight_solution = False
-    menu_handler.insert( "Plan", callback=onPlan )
-    menu_handler.insert( "Reset", callback=onReset )
-    menu_handler.insert( "Execute", callback=onExecute )
-    menu_handler.insert( "Run MPC", callback=onRunMPC )
-
-    interactive_start_state = rospy.get_param('~interactive_start_state', False)
-
-    # set goal pose to object pose on start
-    if not interactive_start_state:
-        pose = get_object_pose(object_frame, reference_frame)
-        if pose is not None:
-            poses[GOAL] = pose
-        else:
-            print "Error! Object pose could not be found"
-
-    reset_markers(True)
-
-    marker = Marker()
-    marker.header.frame_id = "/table_top"
-    marker.scale = Vector3(dim_X, dim_Y, dim_Z)
-    marker.type = Marker.CUBE
-    marker.action = Marker.ADD
-    plan_viz = PlanVisualization(marker, 0.5 * dim_Z);
-
-    planner_client = actionlib.SimpleActionClient('/push_plan_action', PlanPushAction)
+        self.plan_viz.visualize_trajectory(result.trajectory)
+        self.plan_viz.visualize_graph(result.planner_data)
+        return result
 
 
 if __name__=="__main__":
     rospy.init_node("interactive_push_markers_node")
-    server = InteractiveMarkerServer("push_object_controls")
-    init_interaction_server()
+
+    interactive_start_state = rospy.get_param('~interactive_start_state', False)
+
+    # prepare plan visualization with object marker
+    marker = get_object_marker()
+    plan_viz = PlanVisualization(marker, marker.pose.position.z);
+
+    # prepare interactive marker controls
+    controls = InteractiveControls(marker, interactive_start_state)
+
+    # handle menu events
+    event_handler = EventHandler(controls, plan_viz)
+
     rospy.spin()
