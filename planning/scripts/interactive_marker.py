@@ -17,7 +17,7 @@ from plan_visualization import PlanVisualization
 from interactive_markers.interactive_marker_server import *
 from interactive_markers.menu_handler import *
 from visualization_msgs.msg import *
-from geometry_msgs.msg import Point, Pose, Quaternion
+from geometry_msgs.msg import Point, Pose, Quaternion, Vector3
 from std_msgs.msg import ColorRGBA
 
 
@@ -297,7 +297,12 @@ def init_interaction_server():
 
     reset_markers(True)
 
-    plan_viz = PlanVisualization();
+    marker = Marker()
+    marker.header.frame_id = "/table_top"
+    marker.scale = Vector3(dim_X, dim_Y, dim_Z)
+    marker.type = Marker.CUBE
+    marker.action = Marker.ADD
+    plan_viz = PlanVisualization(marker, 0.5 * dim_Z);
 
     planner_client = actionlib.SimpleActionClient('/push_plan_action', PlanPushAction)
 
