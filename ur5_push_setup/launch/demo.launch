@@ -16,5 +16,5 @@
 		<param name="execute" value="true"/>
 	</node>
 
-	<include file="$(find push_planning)/launch/push_planning_demo.launch"/>
+	<include file="$(find tams_ur5_push_planning)/launch/push_planning_demo.launch"/>
 </launch>

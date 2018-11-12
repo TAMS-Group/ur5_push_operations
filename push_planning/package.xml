@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>push_planning</name>
+  <name>tams_ur5_push_planning</name>
   <version>0.0.0</version>
-  <description>The push_planning package</description>
+  <description>The tams_ur5_push_planning package</description>
   <maintainer email="1kayser@informatik.uni-hamburg.de">Henning Kayser</maintainer>
   <license>BSD</license>
 

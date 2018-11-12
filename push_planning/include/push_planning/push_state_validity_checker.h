@@ -47,8 +47,6 @@
 
 #include <push_planning/conversions.h>
 
-#pragma once
-
 namespace ob = ompl::base;
 namespace oc = ompl::control;
 
@@ -96,4 +94,3 @@ class PushStateValidityChecker : public ob::StateValidityChecker
       return scene_->isStateColliding();
     }
 };
-

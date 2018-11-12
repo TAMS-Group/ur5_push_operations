@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8.3)
-project(push_planning)
+project(tams_ur5_push_planning)
 
 add_compile_options(-std=c++11)
 
