@@ -15,7 +15,6 @@ find_package(catkin REQUIRED COMPONENTS
   moveit_msgs
   control_msgs
   visualization_msgs
-  tams_ur5_pushing_object_localization
   tams_ur5_push_msgs
   moveit_core
   moveit_ros_planning

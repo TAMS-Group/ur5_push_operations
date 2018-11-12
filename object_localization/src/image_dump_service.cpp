@@ -41,7 +41,7 @@
 
 namespace push_msgs = tams_ur5_push_msgs;
 
-namespace tams_ur5_pushing_object_localization {
+namespace tams_ur5_push_object_localization {
 
     class ImageDumpService {
 
@@ -130,7 +130,7 @@ int main(int argc, char** argv)
     ros::NodeHandle nh;
     std::string push_results_directory;
     if(nh.getParam("push_result_directory", push_results_directory)) {
-	    tams_ur5_pushing_object_localization::ImageDumpService ids("/kinect2/qhd/image_color", push_results_directory + "/images");
+	    tams_ur5_push_object_localization::ImageDumpService ids("/kinect2/qhd/image_color", push_results_directory + "/images");
     } else {
 	    ROS_ERROR("Failed to retrieve push results directory!");
     }
