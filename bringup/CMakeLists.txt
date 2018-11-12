@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8.3)
-project(ur5_push_setup)
+project(tams_ur5_push_bringup)
 
 find_package(catkin REQUIRED)
 

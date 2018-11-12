@@ -7,7 +7,7 @@
   <xacro:include filename="$(find tams_ur5_setup_description)/urdf/tams_corner.urdf.xacro" />
   <!-- arm -->
   <xacro:include filename="$(find tams_ur5_description)/urdf/arm.urdf.xacro" />
-  <xacro:include filename="$(find ur5_push_setup)/urdf/pusher.urdf.xacro" />
+  <xacro:include filename="$(find tams_ur5_push_bringup)/urdf/pusher.urdf.xacro" />
 
 
   <link name="world" />

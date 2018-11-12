@@ -12,5 +12,5 @@
 
 	<include file="$(find tams_ur5_setup_moveit_config)/launch/move_group.launch"/>
 
-	<include file="$(find ur5_push_setup)/launch/kinect2.launch"/>
+	<include file="$(find tams_ur5_push_bringup)/launch/kinect2.launch"/>
 </launch>

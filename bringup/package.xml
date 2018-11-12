@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>ur5_push_setup</name>
+  <name>tams_ur5_push_bringup</name>
   <version>0.0.1</version>
-  <description>The ur5_push_setup package</description>
+  <description>The tams_ur5_push_bringup package</description>
   <maintainer email="1kayser@informatik.uni-hamburg.de">1kayser</maintainer>
   <license>BSD</license>
 

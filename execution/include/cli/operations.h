@@ -286,7 +286,7 @@ class PushOperations
 
       arm_.setTouchLinks(gripper_.getLinkNames());
 
-      const std::string resource = "package://ur5_push_setup/meshes/pusher_2_aligned_x-binary.stl";
+      const std::string resource = "package://tams_ur5_push_bringup/meshes/pusher_2_aligned_x-binary.stl";
       std::string parent_link = "s_model_tool0";
       arm_.loadPusher(resource, transform, parent_link, "pusher0");
     };
@@ -354,7 +354,7 @@ class PushOperations
     }
 
     void importMeshFromResource(shape_msgs::Mesh& mesh_msg) {
-      std::string resource = "file:///informatik2/students/home/1kayser/ros_demo/src/tams_ur5_push_operations/ur5_push_setup/meshes/pusher_2_aligned-binary.stl";
+      std::string resource = "file:///informatik2/students/home/1kayser/ros_demo/src/tams_ur5_push_operations/tams_ur5_push_bringup/meshes/pusher_2_aligned-binary.stl";
       Eigen::Vector3d scale(0.001, 0.001, 0.001);
       shapes::Shape* shape = shapes::createMeshFromResource(resource, scale);
       shapes::ShapeMsg shape_msg;

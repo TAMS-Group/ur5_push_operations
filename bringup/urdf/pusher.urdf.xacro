@@ -8,13 +8,13 @@
   <link name="${name}">
 	  <visual>
 		  <geometry>
-			  <mesh filename="package://ur5_push_setup/meshes/visual/pusher_2_binary.stl" scale="0.001 0.001 0.001"/>
+			  <mesh filename="package://tams_ur5_push_bringup/meshes/visual/pusher_2_binary.stl" scale="0.001 0.001 0.001"/>
 		  </geometry>
 		  <material name="gray"/>
 	  </visual>
 	  <collision>
 		  <geometry>
-			  <mesh filename="package://ur5_push_setup/meshes/collision/pusher_2_binary.stl" scale="0.001 0.001 0.001"/>
+			  <mesh filename="package://tams_ur5_push_bringup/meshes/collision/pusher_2_binary.stl" scale="0.001 0.001 0.001"/>
 		  </geometry>
 	  </collision>
   </link>

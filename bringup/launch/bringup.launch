@@ -1,12 +1,12 @@
 <launch>
-	<param name="push_result_directory" command="$(find ur5_push_setup)/scripts/create_dump_dirs.sh"/>
+	<param name="push_result_directory" command="$(find tams_ur5_push_bringup)/scripts/create_dump_dirs.sh"/>
 
-	<include file="$(find ur5_push_setup)/launch/ur5_setup_bringup.launch">
-		<arg name="ur5_joint_ranges_config" value="$(find ur5_push_setup)/config/elbow_up-restricted.yaml"/>
+	<include file="$(find tams_ur5_push_bringup)/launch/ur5_setup_bringup.launch">
+		<arg name="ur5_joint_ranges_config" value="$(find tams_ur5_push_bringup)/config/elbow_up-restricted.yaml"/>
 		<arg name="ur5_floating_table" value="false"/>
 	</include>
 
-   	<param name="move_group/constraint_approximations_path" value="$(find ur5_push_setup)/cadb"/>
+	<param name="move_group/constraint_approximations_path" value="$(find tams_ur5_push_bringup)/cadb"/>
 
 	<include file="$(find tams_ur5_push_object_localization)/launch/object_localization.launch">
 		<arg name="demo_mode" value="false"/>

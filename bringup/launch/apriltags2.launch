@@ -9,6 +9,6 @@
     <param name="publish_tag_detections_image" type="bool" value="false" />      <!-- default: false -->
 
     <rosparam command="load" file="$(find tams_ur5_setup_bringup)/config/apriltags2/settings.yaml"/>
-    <rosparam command="load" file="$(find ur5_push_setup)/config/apriltags.yaml"/>
+    <rosparam command="load" file="$(find tams_ur5_push_bringup)/config/apriltags.yaml"/>
   </node>
 </launch>
