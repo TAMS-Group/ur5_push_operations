@@ -89,7 +89,7 @@ class PushStateValidityChecker : public ob::StateValidityChecker
     {
       // move object to state and check for collisions
       convertStateToPose(state, obj.object.primitive_poses[0]);
-      obj.object.primitive_poses[0].position.z = 0.5 * dimZ + 0.001;
+      obj.object.primitive_poses[0].position.z = 0.5 * obj.object.primitives[0].dimensions[2] + 0.001;
       scene_->processAttachedCollisionObjectMsg(obj);
       return scene_->isStateColliding();
     }
