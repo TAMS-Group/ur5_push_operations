@@ -206,6 +206,9 @@ class EventHandler:
 
         self.planner_client = actionlib.SimpleActionClient('/push_plan_action', PlanPushAction)
 
+        rospy.wait_for_service("push_execution")
+        self.execute_service = rospy.ServiceProxy("push_execution", ExecutePush)
+
 
     def onMove(self, feedback ):
         if feedback.event_type == feedback.MOUSE_DOWN:
@@ -250,38 +253,78 @@ class EventHandler:
                 break
 
     def onRunMPC( self, feedback ):
-        print "run mpc"
-        rospy.wait_for_service("push_execution")
-        print "found service"
-        execute_push = rospy.ServiceProxy("push_execution", ExecutePush)
-        current_pose = self.controls.get_start_pose()
-        goal_pose = self.controls.get_goal_pose()
-        failed_attempts = 0
-        while se2Distance(current_pose, goal_pose) > 0.05 and failed_attempts < 10:
-            # set current pose
-            current_pose = self.controls.get_start_pose()
+        pose = self.controls.get_start_pose()
+        goal = self.controls.get_goal_pose()
+        attempts = 0
 
-            # call action
-            plan = self.call_push_plan_action("object_id", current_pose, goal_pose)
-            push = plan.trajectory.pushes[0]
-            push.approach.frame_id = object_frame
+        # run MPC as long as goal is not reached and attempts
+        while se2Distance(pose, goal) > 0.05 and attempts < 10:
 
-            # hide markers
+            # call push plan action
+            plan = self.call_push_plan_action("object_id", pose, goal)
+
+            # highlight plan
             self.highlight_solution = True
             self.controls.reset_markers(False)
 
-            print "execute push", push
-            try:
-                resp = execute_push(push)
-                if not resp.result:
-                    failed_attempts += 1
-                    continue
-            except rospy.ServiceException as e:
-                print("Service did not process request: " + str(e))
-                failed_attempts += 1
+            # attempt to execute the push
+            push = plan.trajectory.pushes[0]
+            attempts += 1
+
+            if self.execute_push(push):
+                attempts = 0 # reset attempts
+
+            pose = self.controls.get_start_pose()
+
+
+    def onRunMultiStepMPC( self, feedback ):
+        pose = self.controls.get_start_pose()
+        goal = self.controls.get_goal_pose()
+        replan = True
+        attempts = 0
+        step = 0
+
+        # run MPC as long as goal is not reached and attempts
+        while se2Distance(pose, goal) > 0.05 and attempts < 10 :
+
+            # replan, if necessary
+            if replan :
+
+                # call push plan action
+                plan = self.call_push_plan_action("object_id", pose, goal)
+                step = 0
+
+                # highlight plan
+                self.highlight_solution = True
+                self.controls.reset_markers(False)
+
+            # replan, if end of trajectory is reached
+            if not step < len(plan.trajectory.pushes):
+                replan = True
                 continue
 
-            failed_attempts = 0
+            # attempt to execute the push
+            push = plan.trajectory.pushes[step]
+            attempts += 1
+
+            if self.execute_push(push):
+                attempts = 0 # reset attempts
+                step += 1 # increase trajectory step
+
+            # query new object pose
+            pose = self.controls.get_start_pose()
+            # replan, if the object deviates from path
+            replan = se2Distance(pose, plan.trajectory.poses[step]) > 0.05
+
+
+    def execute_push(self, push):
+        print "execute push", push
+        try:
+            result = self.execute_service(push)
+            return result.result
+        except rospy.ServiceException as e:
+            print("Service did not process request: " + str(e))
+        return False
 
     def call_push_plan_action(self, object_id, start_pose, goal_pose):
 
