@@ -53,6 +53,7 @@
 const double dimX = 0.162;
 const double dimY = 0.23;
 const double dimZ = 0.112;
+const std::string object_frame = "pushable_object_0";
 
 void convertControlToPush(const oc::Control *control, tams_ur5_push_msgs::Push& push) {
   const double* ctrl = control->as<oc::RealVectorControlSpace::ControlType>()->values;
@@ -60,6 +61,7 @@ void convertControlToPush(const oc::Control *control, tams_ur5_push_msgs::Push& 
   geometry_msgs::Pose pose = push_sampler::PushSampler::getPoseFromBoxBorder(ctrl[0], dimX, dimY, dimZ);
   push.approach.point = pose.position;
   push.approach.normal = pose.orientation;
+  push.approach.frame_id = object_frame;
   // normalize angle to +- 45°
   push.approach.angle = (ctrl[1] - 0.5) * 0.5 * M_PI;
   // normalize distance range to 0.0m-0.05m
