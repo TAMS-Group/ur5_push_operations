@@ -150,7 +150,7 @@ namespace push_sampler
     // move box to center
     pose.position.x -= 0.5*dim_x;
     pose.position.y -= 0.5*dim_y;
-    pose.position.z = 0.5*dim_z;
+    pose.position.z = 0.0;
     return pose;
   }
 

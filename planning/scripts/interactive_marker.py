@@ -6,7 +6,7 @@ import rospy
 import tf
 from tf import TransformListener
 import actionlib
-
+from lib import content_helper as ch
 
 from tams_ur5_push_msgs.srv import ExecutePush, ExecutePushRequest, ExecutePushResponse
 from tams_ur5_push_msgs.msg import PlanPushAction, PlanPushGoal
@@ -20,6 +20,9 @@ from visualization_msgs.msg import *
 from geometry_msgs.msg import Point, Pose, Quaternion, Vector3
 from std_msgs.msg import ColorRGBA
 
+import numpy as np
+from math import pi
+
 
 dim_X = 0.162
 dim_Y = 0.23
@@ -28,6 +31,10 @@ dim_Z = 0.112
 START = "start pose"
 GOAL= "goal pose"
 
+object_frame = "pushable_object_0"
+
+def linalg_dist(p1, p2):
+    return np.linalg.norm([p1.position.x - p2.position.x, p1.position.y - p2.position.y])
 
 def se2Distance(p1, p2):
     p_dist = linalg_dist(p1, p2)
@@ -51,7 +58,7 @@ def get_object_pose(object_frame, reference_frame):
         print object_frame, reference_frame
         tf_l.waitForTransform(object_frame, reference_frame, rospy.Time(0), rospy.Duration(5.0))
         if (tf_l.frameExists(object_frame) and tf_l.frameExists(reference_frame)):
-            p,q = tf_l.lookupTransform(object_frame, reference_frame, rospy.Time(0))
+            p,q = tf_l.lookupTransform(reference_frame, object_frame, rospy.Time(0))
             pose = Pose(Point(*p), Quaternion(*q))
     except (tf.LookupException, tf.ConnectivityException):
         print "Unable to retrieve object pose!"
@@ -68,6 +75,7 @@ class InteractiveControls:
                  menu_handler= None,
                  on_move_callback= None,
                  reference_frame = "table_top",
+                 object_frame = "pushable_object_0",
                  start_pose= Pose(Point(-0.2, -0.2, 0.0), Quaternion(0.0, 0.0, 0.0, 1.0)),
                  goal_pose= Pose(Point(0.2, 0.2, 0.0), Quaternion(0.0, 0.0, 0.0, 1.0)),
                  start_color= ColorRGBA(0.0,0.0,1.0,1.0),
@@ -77,6 +85,7 @@ class InteractiveControls:
         self.server = InteractiveMarkerServer("push_object_controls") if server is None else server
         self.object_marker = object_marker
         self.reference_frame = reference_frame
+        self.object_frame = object_frame
         self.interactive_start_state = interactive_start_state
         self.poses = { START: start_pose, GOAL: goal_pose }
         self.colors = { START: start_color, GOAL: goal_color }
@@ -149,7 +158,7 @@ class InteractiveControls:
 
     def get_start_pose(self):
         if not self.interactive_start_state:
-            pose = get_object_pose(object_frame, reference_frame)
+            pose = get_object_pose(self.object_frame, self.reference_frame)
             if pose is not None:
                 self.poses[START] = pose
         return self.poses[START]
@@ -240,7 +249,7 @@ class EventHandler:
                 print("Service did not process request: " + str(e))
                 break
 
-    def onRunMPC( feedback ):
+    def onRunMPC( self, feedback ):
         print "run mpc"
         rospy.wait_for_service("push_execution")
         print "found service"
@@ -248,7 +257,7 @@ class EventHandler:
         current_pose = self.controls.get_start_pose()
         goal_pose = self.controls.get_goal_pose()
         failed_attempts = 0
-        while se2Distance(current_pose, goal) > 0.05 and failed_attempts < 10:
+        while se2Distance(current_pose, goal_pose) > 0.05 and failed_attempts < 10:
             # set current pose
             current_pose = self.controls.get_start_pose()
 
