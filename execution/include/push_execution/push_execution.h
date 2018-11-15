@@ -374,6 +374,20 @@ namespace push_execution
                 return marker_.header.frame_id;
             }
 
+
+            bool isObjectColliding(float padding=0.02) {
+                    moveit_msgs::AttachedCollisionObject obj;
+                    createCollisionObject(marker_, obj.object, padding);
+                    obj.object.id = "padded_collision_test_object";
+                    obj.link_name = "s_model_tool0";
+                    planning_scene::PlanningScenePtr scene(psm_.getPlanningScene());
+                    scene->processAttachedCollisionObjectMsg(obj);
+                    bool collision = scene->isStateColliding();
+                    obj.object.operation = moveit_msgs::CollisionObject::REMOVE;
+                    scene->processAttachedCollisionObjectMsg(obj);
+                    return collision;
+            }
+
         private:
 
             bool isObjectClear() {
@@ -637,30 +651,31 @@ namespace push_execution
             }
 
             void onDetectObjects(visualization_msgs::Marker marker) {
-                if(marker_.id != marker.id && createCollisionObject(marker)) {
+                if(marker_.id != marker.id && createCollisionObject(marker, obj_)) {
                     marker_ = marker;
                 }
                 marker_stamp_ = marker.header.stamp;
             }
 
-            bool createCollisionObject(visualization_msgs::Marker& marker, float padding=0.015) {
+            bool createCollisionObject(const visualization_msgs::Marker& marker, moveit_msgs::CollisionObject& obj, float padding=0.015) {
                 if(marker.type == visualization_msgs::Marker::CUBE) {
-                    obj_.id = marker.header.frame_id + "_collision";
-                    obj_.header.stamp = ros::Time(0);
-                    obj_.header.frame_id = marker.header.frame_id;
-                    obj_.primitive_poses.resize(1);
-                    obj_.primitive_poses[0].orientation.w = 1;
-                    obj_.primitive_poses[0].position.z = 0.5 * padding;
-                    obj_.primitives.resize(1);
-                    obj_.operation = moveit_msgs::CollisionObject::ADD;
-                    obj_.primitives[0].type = shape_msgs::SolidPrimitive::BOX;
-                    obj_.primitives[0].dimensions.resize(3);
-                    obj_.primitives[0].dimensions[shape_msgs::SolidPrimitive::BOX_X] = marker.scale.x + 2 * padding;
-                    obj_.primitives[0].dimensions[shape_msgs::SolidPrimitive::BOX_Y] = marker.scale.y + 2 * padding;
-                    obj_.primitives[0].dimensions[shape_msgs::SolidPrimitive::BOX_Z] = marker.scale.z + padding;
+                    obj.id = marker.header.frame_id + "_collision";
+                    obj.header.stamp = ros::Time(0);
+                    obj.header.frame_id = marker.header.frame_id;
+                    obj.primitive_poses.resize(1);
+                    obj.primitive_poses[0].orientation.w = 1;
+                    obj.primitive_poses[0].position.z = 0.5 * padding;
+                    obj.primitives.resize(1);
+                    obj.operation = moveit_msgs::CollisionObject::ADD;
+                    obj.primitives[0].type = shape_msgs::SolidPrimitive::BOX;
+                    obj.primitives[0].dimensions.resize(3);
+                    obj.primitives[0].dimensions[shape_msgs::SolidPrimitive::BOX_X] = marker.scale.x + 2 * padding;
+                    obj.primitives[0].dimensions[shape_msgs::SolidPrimitive::BOX_Y] = marker.scale.y + 2 * padding;
+                    obj.primitives[0].dimensions[shape_msgs::SolidPrimitive::BOX_Z] = marker.scale.z + padding;
                     return true;
                 }
                 return false;
             }
+
     };
 }
