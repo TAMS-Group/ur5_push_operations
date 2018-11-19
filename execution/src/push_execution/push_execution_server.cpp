@@ -89,12 +89,13 @@ class PushExecutionServer {
         id_count_++;
         push_execution_->reset();
         res.result = push_execution_->performPush(req.push, id_count_, execute_);
-        service_busy_ = false;
 
         if (push_execution_->isObjectColliding(0.02)) {
           geometry_msgs::Pose pose = push_execution_->getObjectPose();
           greedy_pushing_->pushTo(pose, pose, pose, false, 0.03);
+          res.result = false;
         }
+        service_busy_ = false;
       }
       return res.result;
     }
