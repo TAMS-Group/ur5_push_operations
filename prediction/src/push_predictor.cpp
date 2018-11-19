@@ -60,7 +60,7 @@ namespace push_prediction {
     PushPredictor::PushPredictor()
     {
         //network_.load(ros::package::getPath("push_prediction") + "/scripts/keras_model.yaml");
-        network_.load(ros::package::getPath("push_prediction") + "/models/model_with_distance.yaml");
+        network_.load(ros::package::getPath("tams_ur5_push_prediction") + "/models/model_with_distance.yaml");
     }
 
     void PushPredictor::setReuseSolutions(bool reuseSolutions) {
