@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8.3)
-project(push_prediction)
+project(tams_ur5_push_prediction)
 
 add_compile_options(-std=c++11)
 
