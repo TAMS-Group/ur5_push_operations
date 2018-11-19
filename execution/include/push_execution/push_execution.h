@@ -95,6 +95,7 @@ namespace push_execution
             moveit::planning_interface::PlanningSceneInterface psi_;
 
             push_sampler::ExplorationSampler push_sampler_;
+            Pusher pusher_;
 
             ros::ServiceClient snapshot_client_;
             bool take_snapshots_ = false;
@@ -111,7 +112,7 @@ namespace push_execution
             double tip_radius_;
 
         public:
-            PushExecution(bool execute_plan=false) : psm_("robot_description"){
+            PushExecution(bool execute_plan=false, const std::string& group_name="arm") : psm_("robot_description"), pusher_(group_name){
 
                 nh_ = (*new ros::NodeHandle());
                 pnh_ = (*new ros::NodeHandle("~"));
@@ -130,9 +131,9 @@ namespace push_execution
                 marker_.id = -1;
             }
 
-            bool performRandomPush(push_execution::Pusher& pusher, bool execute_plan=false) {
+            bool performRandomPush(bool execute_plan=false) {
               push_msgs::ExplorePushesFeedback fb;
-                return performRandomPush(pusher, fb, execute_plan);
+                return performRandomPush(fb, execute_plan);
             }
 
             void enableSnapshots() {
@@ -145,14 +146,14 @@ namespace push_execution
             }
 
 
-            bool performRandomPush(Pusher& pusher, push_msgs::ExplorePushesFeedback& feedback, bool execute_plan=true) 
+            bool performRandomPush(push_msgs::ExplorePushesFeedback& feedback, bool execute_plan=true)
             {
               push_msgs::Push push;
                 ros::Duration(0.5).sleep();
                 if (isObjectClear() && createRandomPushMsg(push)) {
                     feedback.push = push;
                     tf::poseEigenToMsg(getObjectTransform(push.approach.frame_id), feedback.pre_push);
-                    bool success = performPush(pusher, push, feedback.id, execute_plan);
+                    bool success = performPush(push, feedback.id, execute_plan);
                     // Observe Relocation
                     tf::poseEigenToMsg(getObjectTransform(push.approach.frame_id), feedback.post_push);
                     return success;
@@ -161,13 +162,13 @@ namespace push_execution
                 }
             }
 
-            bool performPush(Pusher& pusher, const push_msgs::Push& push, push_msgs::MoveObjectFeedback& feedback, bool execute_plan=true) 
+            bool performPush(const push_msgs::Push& push, push_msgs::MoveObjectFeedback& feedback, bool execute_plan=true)
             {
                 ros::Duration(0.5).sleep();
                 if (isObjectClear()) {
                     feedback.push = push;
                     tf::poseEigenToMsg(getObjectTransform(push.approach.frame_id), feedback.pre_push);
-                    bool success = performPush(pusher, push, feedback.id, execute_plan);
+                    bool success = performPush(push, feedback.id, execute_plan);
                     // Observe Relocation
                     tf::poseEigenToMsg(getObjectTransform(push.approach.frame_id), feedback.post_push);
                     return success;
@@ -176,12 +177,12 @@ namespace push_execution
                 }
             }
 
-            bool performPush(Pusher& pusher, const push_msgs::Push& push, int attempt_id, bool execute_plan=true) 
+            bool performPush(const push_msgs::Push& push, int attempt_id=0, bool execute_plan=true)
             {
                 if(isObjectClear()) {
 
-                    pusher.setPlannerId("RRTConnectkConfigDefault");
-                    pusher.setPlanningTime(5.0);
+                    pusher_.setPlannerId("RRTConnectkConfigDefault");
+                    pusher_.setPlanningTime(5.0);
 
                     //remove collision object in case the last attempt failed
                     removeCollisionObject();
@@ -190,7 +191,7 @@ namespace push_execution
                     moveit::planning_interface::MoveGroupInterface::Plan push_plan;
                     moveit_msgs::RobotTrajectory approach_traj, push_traj, retreat_traj;
 
-                    robot_state::RobotState rstate(*pusher.getCurrentState());
+                    robot_state::RobotState rstate(*pusher_.getCurrentState());
 
                     std::vector<std::vector<geometry_msgs::Pose>> waypoints;
                     std::vector<double> distances;
@@ -201,20 +202,20 @@ namespace push_execution
                     geometry_msgs::PoseStamped ps;
                     ps.pose = waypoints.front().front();
                     ps.header.frame_id = "table_top";
-                    tf_listener_.transformPose(pusher.getPlanningFrame(), ps, ps);
+                    tf_listener_.transformPose(pusher_.getPlanningFrame(), ps, ps);
 
-                    if(pusher.setPusherJointValueTarget(ps)) {
-                        robot_state::RobotState start_state = pusher.getJointValueTarget();
+                    if(pusher_.setPusherJointValueTarget(ps)) {
+                        robot_state::RobotState start_state = pusher_.getJointValueTarget();
 
                         // apply collision object before moving to pre_push
                         applyCollisionObject();
                         if(!first_attempt_)
-                            pusher.setPathConstraints(get_pusher_down_constraints());
+                            pusher_.setPathConstraints(get_pusher_down_constraints());
 
                         // plan move to box
                         moveit::planning_interface::MoveGroupInterface::Plan move_to_box;
-                        pusher.setStartStateToCurrentState();
-                        if(!pusher.plan(move_to_box)) {
+                        pusher_.setStartStateToCurrentState();
+                        if(!pusher_.plan(move_to_box)) {
                             ROS_ERROR("Failed planning of movement to box!");
                             return false;
                         }
@@ -234,39 +235,39 @@ namespace push_execution
                                         }
                                     });
 
-                        if(!pusher.asyncExecute(move_to_box)) {
+                        if(!pusher_.asyncExecute(move_to_box)) {
                             ROS_ERROR("Failed execution of movement to box!");
                             return false;
                         }
 
                         // remove all path constraints
-                        pusher.clearPathConstraints();
+                        pusher_.clearPathConstraints();
 
                         // allow object collision
                         removeCollisionObject();
 
                         // plan push
-                        can_push = computeCartesianPushTraj(pusher, waypoints, distances, approach_traj, push_traj, retreat_traj, start_state);
+                        can_push = computeCartesianPushTraj(waypoints, distances, approach_traj, push_traj, retreat_traj, start_state);
 
                         // wait for trajectory to finish
                         while(is_executing) {
                             ROS_ERROR_THROTTLE(1, "Moving to approach pose.");
                         }
-                        pusher.setStartStateToCurrentState();
+                        pusher_.setStartStateToCurrentState();
                         if(trajectory_execution_result_code != moveit_msgs::MoveItErrorCodes::SUCCESS) {
                             ROS_ERROR("Failed at trajectory execution! Aborting push attempt.");
                             return false;
                         }
                         if(!can_push) {
                             ROS_ERROR("Failed to plan push trajectory - Moving back!");
-                            robot_trajectory::RobotTrajectory traj(pusher.getRobotModel(), pusher.getName());
+                            robot_trajectory::RobotTrajectory traj(pusher_.getRobotModel(), pusher_.getName());
                             moveit::planning_interface::MoveGroupInterface::Plan move_back;
-                            traj.setRobotTrajectoryMsg((*pusher.getCurrentState()), move_to_box.trajectory_);
+                            traj.setRobotTrajectoryMsg((*pusher_.getCurrentState()), move_to_box.trajectory_);
                             traj.reverse();
                             traj.getRobotTrajectoryMsg(move_back.trajectory_);
-                            recomputeTimestamps(pusher, move_back.trajectory_);
+                            recomputeTimestamps(move_back.trajectory_);
                             applyCollisionObject();
-                            pusher.execute(move_back);
+                            pusher_.execute(move_back);
                             return false;
                         }
 
@@ -275,7 +276,7 @@ namespace push_execution
 
                             // create intermediate states (contact,  post push)
                             robot_state::RobotState contact_state(rstate);
-                            contact_state.setJointGroupPositions(pusher.getName(), approach_traj.joint_trajectory.points.back().positions);
+                            contact_state.setJointGroupPositions(pusher_.getName(), approach_traj.joint_trajectory.points.back().positions);
 
                             if(take_snapshots_) {
 
@@ -285,7 +286,7 @@ namespace push_execution
                                 csm_->addUpdateCallback(
                                         [&] (const sensor_msgs::JointStateConstPtr& joint_state) {
                                         if(!contact_shot && joint_state->name.size()>0 && joint_state->name[0] == "ur5_shoulder_pan_joint") {
-                                        rstate.setJointGroupPositions(pusher.getName(), joint_state->position);
+                                        rstate.setJointGroupPositions(pusher_.getName(), joint_state->position);
 
                                         if(rstate.distance(contact_state) < 0.03) {
                                         contact_shot = true;
@@ -296,21 +297,21 @@ namespace push_execution
                             }
 
                             // concatenate trajectory parts
-                            pusher.getCurrentState()->copyJointGroupPositions("arm", approach_traj.joint_trajectory.points[0].positions);
-                            robot_trajectory::RobotTrajectory traj(pusher.getRobotModel(), pusher.getName());
-                            robot_trajectory::RobotTrajectory append_traj(pusher.getRobotModel(), pusher.getName());
-                            traj.setRobotTrajectoryMsg((*pusher.getCurrentState()), approach_traj);
+                            pusher_.getCurrentState()->copyJointGroupPositions("arm", approach_traj.joint_trajectory.points[0].positions);
+                            robot_trajectory::RobotTrajectory traj(pusher_.getRobotModel(), pusher_.getName());
+                            robot_trajectory::RobotTrajectory append_traj(pusher_.getRobotModel(), pusher_.getName());
+                            traj.setRobotTrajectoryMsg((*pusher_.getCurrentState()), approach_traj);
                             append_traj.setRobotTrajectoryMsg(contact_state, push_traj);
                             traj.append(append_traj, 0.0);
                             // perform iterative time parameterization
                             traj.getRobotTrajectoryMsg(push_plan.trajectory_);
-                            recomputeTimestamps(pusher, push_plan.trajectory_);
+                            recomputeTimestamps(push_plan.trajectory_);
 
                             if(take_snapshots_)
                                 take_snapshot(std::to_string(attempt_id) + "_1_before");
 
                             // EXECUTE PUSH
-                            pusher.execute(push_plan);
+                            pusher_.execute(push_plan);
 
                             if(take_snapshots_)
                                 csm_->clearUpdateCallbacks();
@@ -319,11 +320,11 @@ namespace push_execution
                                 take_snapshot(std::to_string(attempt_id) + "_3_after");
 
                             // retreat trajectory
-                            pusher.getCurrentState()->copyJointGroupPositions("arm", retreat_traj.joint_trajectory.points[0].positions);
-                            recomputeTimestamps(pusher, retreat_traj);
+                            pusher_.getCurrentState()->copyJointGroupPositions("arm", retreat_traj.joint_trajectory.points[0].positions);
+                            recomputeTimestamps(retreat_traj);
                             push_plan.trajectory_ = retreat_traj;
 
-                            pusher.execute(push_plan);
+                            pusher_.execute(push_plan);
 
                             first_attempt_ = false;
                             return true;
@@ -335,16 +336,16 @@ namespace push_execution
                 return false;
             }
 
-            bool pointAtBox(Pusher& pusher) {
+            bool pointAtBox() {
                 if(marker_.header.frame_id.empty())
                     return false;
                 geometry_msgs::Pose pose;
                 pose.position.z = 0.5 * marker_.scale.z + 0.025;
                 pose.orientation.w = 1.0;
-                pusher.setPoseReferenceFrame(marker_.header.frame_id);
-                pusher.setPusherPoseTarget(pose);
+                pusher_.setPoseReferenceFrame(marker_.header.frame_id);
+                pusher_.setPusherPoseTarget(pose);
                 applyCollisionObject();
-                bool success = bool(pusher.move());
+                bool success = bool(pusher_.move());
                 removeCollisionObject();
                 return success;
             }
@@ -352,6 +353,11 @@ namespace push_execution
             void reset()
             {
                 first_attempt_ = true;
+            }
+
+            geometry_msgs::Pose getObjectPose()
+            {
+                return getObjectPose(marker_.header.frame_id);
             }
 
             geometry_msgs::Pose getObjectPose(const std::string& obj_frame, const std::string& target_frame="table_top")
@@ -374,6 +380,9 @@ namespace push_execution
                 return marker_.header.frame_id;
             }
 
+            visualization_msgs::Marker getObjectMarker() const {
+              return marker_;
+            }
 
             bool isObjectColliding(float padding=0.02) {
                     moveit_msgs::AttachedCollisionObject obj;
@@ -386,6 +395,14 @@ namespace push_execution
                     obj.object.operation = moveit_msgs::CollisionObject::REMOVE;
                     scene->processAttachedCollisionObjectMsg(obj);
                     return collision;
+            }
+
+            bool isPusherAvailable()
+            {
+                if(!pusher_.isPusherAttached() && !pusher_.loadFromAttachedObject()) {
+                    return false;
+                }
+                return true;
             }
 
         private:
@@ -404,10 +421,10 @@ namespace push_execution
                 return true;
             }
 
-            void recomputeTimestamps(Pusher& pusher, moveit_msgs::RobotTrajectory& trajectory_msg, double max_vel=3.14, double max_accel=1.0) {
+            void recomputeTimestamps(moveit_msgs::RobotTrajectory& trajectory_msg, double max_vel=3.14, double max_accel=1.0) {
 
-                robot_trajectory::RobotTrajectory traj(pusher.getRobotModel(), pusher.getName());
-                traj.setRobotTrajectoryMsg((*pusher.getCurrentState()), trajectory_msg);
+                robot_trajectory::RobotTrajectory traj(pusher_.getRobotModel(), pusher_.getName());
+                traj.setRobotTrajectoryMsg((*pusher_.getCurrentState()), trajectory_msg);
                 //trajectory_processing::IterativeSplineParameterization isp;
                 trajectory_processing::IterativeParabolicTimeParameterization isp;
                 isp.computeTimeStamps(traj, max_vel, max_accel);
@@ -573,17 +590,17 @@ namespace push_execution
                 wp_distances = {approach_distance, push.distance, retreat_distance};
             }
 
-            bool computeCartesianPushTraj(Pusher& pusher, std::vector<std::vector<geometry_msgs::Pose>> waypoints, const std::vector<double> distances, moveit_msgs::RobotTrajectory& approach_traj, moveit_msgs::RobotTrajectory& push_traj, moveit_msgs::RobotTrajectory& retreat_traj, const robot_state::RobotState start_state)
+            bool computeCartesianPushTraj(std::vector<std::vector<geometry_msgs::Pose>> waypoints, const std::vector<double> distances, moveit_msgs::RobotTrajectory& approach_traj, moveit_msgs::RobotTrajectory& push_traj, moveit_msgs::RobotTrajectory& retreat_traj, const robot_state::RobotState start_state)
             {
                 ros::Time start_time = ros::Time::now();
                 bool success = false;
                 if(waypoints.size() == 4 && distances.size() == 3) {
-                    pusher.setPoseReferenceFrame("table_top");
+                    pusher_.setPoseReferenceFrame("table_top");
 
                     robot_state::RobotStatePtr next_state = std::make_shared<robot_state::RobotState>(start_state);
-                    const moveit::core::JointModelGroup* jmg = start_state.getJointModelGroup(pusher.getName());
+                    const moveit::core::JointModelGroup* jmg = start_state.getJointModelGroup(pusher_.getName());
 
-                    pusher.setStartState(start_state);
+                    pusher_.setStartState(start_state);
                     std::vector<geometry_msgs::Pose> wp_target;
                     std::vector<moveit_msgs::RobotTrajectory> trajectories;
 
@@ -592,11 +609,11 @@ namespace push_execution
                     double success_fraction;
                     for(i=1; i < waypoints.size(); i++) {
                         moveit_msgs::RobotTrajectory traj;
-                        success_fraction = pusher.computeCartesianPushPath(waypoints[i], 0.1 * distances[i-1], 3, traj);
+                        success_fraction = pusher_.computeCartesianPushPath(waypoints[i], 0.1 * distances[i-1], 3, traj);
                         if(success_fraction == 1.0) {
                             trajectories.push_back(traj);
                             next_state->setJointGroupPositions(jmg, traj.joint_trajectory.points.back().positions);
-                            pusher.setStartState((*next_state));
+                            pusher_.setStartState((*next_state));
                         } else {
                             ROS_ERROR_STREAM("Failed planning push trajectory step " << i+1 << " with success percentage " << success_fraction * 100 << "%");
                             success = false;
@@ -676,6 +693,5 @@ namespace push_execution
                 }
                 return false;
             }
-
     };
 }

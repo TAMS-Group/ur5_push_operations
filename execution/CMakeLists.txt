@@ -16,6 +16,7 @@ find_package(catkin REQUIRED COMPONENTS
   control_msgs
   visualization_msgs
   tams_ur5_push_msgs
+  tams_ur5_push_prediction
   moveit_core
   moveit_ros_planning
   moveit_ros_planning_interface
@@ -41,7 +42,7 @@ add_library(pusher src/push_execution/pusher.cpp)
 add_library(push_sampler src/push_sampler/exploration_sampler.cpp src/push_sampler/push_sampler.cpp)
 
 add_executable(push_execution src/push_execution/push_execution_server.cpp)
-target_link_libraries(push_execution ${catkin_LIBRARIES} pusher push_sampler)
+target_link_libraries(push_execution ${catkin_LIBRARIES} pusher push_sampler push_predictor)
 add_dependencies(push_execution ${catkin_EXPORTED_TARGETS})
 
 ## Declare a C++ library

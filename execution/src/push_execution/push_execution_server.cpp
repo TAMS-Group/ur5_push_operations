@@ -36,6 +36,7 @@
 
 #include <push_execution/pusher.h>
 #include <push_execution/push_execution.h>
+#include <push_execution/greedy_pushing.h>
 
 #include <tams_ur5_push_msgs/Push.h>
 #include <tams_ur5_push_msgs/PusherMovement.h>
@@ -50,7 +51,7 @@ class PushExecutionServer {
   private:
 
     PushExecution* push_execution_;
-    Pusher pusher_;
+    GreedyPushing* greedy_pushing_;
 
     actionlib::SimpleActionServer<tams_ur5_push_msgs::ExplorePushesAction> explore_pushes_server_;
     actionlib::SimpleActionServer<tams_ur5_push_msgs::MoveObjectAction> move_object_server_;
@@ -61,6 +62,7 @@ class PushExecutionServer {
     ros::ServiceClient push_sampler_;
 
 
+
     bool service_busy_ = false;
     bool execute_= false;
     bool take_snapshots_ = false;
@@ -69,15 +71,12 @@ class PushExecutionServer {
 
     bool isPusherAvailable()
     {
-      if(!pusher_.isPusherAttached() && !pusher_.loadFromAttachedObject()) {
-        return false;
-      }
-      return true;
+      return push_execution_->isPusherAvailable();
     }
 
     bool pointAtBox(tams_ur5_push_msgs::PusherMovement::Request& req, tams_ur5_push_msgs::PusherMovement::Response& res)
     {
-      res.success = isPusherAvailable() && push_execution_->pointAtBox(pusher_);
+      res.success = isPusherAvailable() && push_execution_->pointAtBox();
       return true;
     }
 
@@ -89,8 +88,13 @@ class PushExecutionServer {
         service_busy_ = true;
         id_count_++;
         push_execution_->reset();
-        res.result = push_execution_->performPush(pusher_, req.push, id_count_, execute_);
+        res.result = push_execution_->performPush(req.push, id_count_, execute_);
         service_busy_ = false;
+
+        if (push_execution_->isObjectColliding(0.02)) {
+          geometry_msgs::Pose pose = push_execution_->getObjectPose();
+          greedy_pushing_->pushTo(pose, pose, pose, false, 0.03);
+        }
       }
       return res.result;
     }
@@ -122,7 +126,7 @@ class PushExecutionServer {
           // perform new attempt and publish feedback
           result.attempts++;
           id_count_++;
-          if(push_execution_->performRandomPush(pusher_, feedback, execute_)) {
+          if(push_execution_->performRandomPush(feedback, execute_)) {
             explore_pushes_server_.publishFeedback(feedback);
             success_count++;
             failed_in_a_row = 0;
@@ -212,7 +216,7 @@ class PushExecutionServer {
             failed_in_a_row++;
             continue;
           }
-          if(push_execution_->performPush(pusher_, push, feedback, execute_)) {
+          if(push_execution_->performPush(push, feedback, execute_)) {
             move_object_server_.publishFeedback(feedback);
             success_count++;
             failed_in_a_row = 0;
@@ -297,7 +301,7 @@ class PushExecutionServer {
 
   public:
 
-    PushExecutionServer(ros::NodeHandle& nh, std::string group_name) : pusher_(group_name), explore_pushes_server_(nh, "explore_pushes_action", true), move_object_server_(nh, "move_object_action", true)
+    PushExecutionServer(ros::NodeHandle& nh) : explore_pushes_server_(nh, "explore_pushes_action", true), move_object_server_(nh, "move_object_action", true)
   {
     ros::NodeHandle pnh("~");
     pnh.param("take_snapshots", take_snapshots_, false);
@@ -306,8 +310,9 @@ class PushExecutionServer {
     push_execution_service_ = nh.advertiseService("push_execution", &PushExecutionServer::executePush, this);
     push_sampler_= nh.serviceClient<tams_ur5_push_msgs::SamplePredictivePush>("predictive_push_sampler");
 
-    isPusherAvailable();
     push_execution_ = new PushExecution();
+    isPusherAvailable();
+    greedy_pushing_ = new GreedyPushing(push_execution_);
     if(execute_ && take_snapshots_)
       push_execution_->enableSnapshots();
 
@@ -335,7 +340,7 @@ int main(int argc, char** argv) {
 
   ros::NodeHandle nh;
 
-  push_execution::PushExecutionServer pes(nh, "arm");
+  push_execution::PushExecutionServer pes(nh);
 
   ros::waitForShutdown();
 
