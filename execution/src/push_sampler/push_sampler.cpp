@@ -53,6 +53,7 @@ namespace push_sampler
     shape_.dimensions[1] = marker.scale.y;
     shape_.dimensions[2] = marker.scale.z;
     object_ready_ = true;
+    object_frame_ = marker.header.frame_id;
     return true;
   }
 
@@ -67,16 +68,17 @@ namespace push_sampler
       return false;
     }
 
-    return setObject(object.primitives[0]);
+    return setObject(object.primitives[0], object.header.frame_id);
   }
 
-  bool PushSampler::setObject(const shape_msgs::SolidPrimitive& shape)
+  bool PushSampler::setObject(const shape_msgs::SolidPrimitive& shape, const std::string& object_frame)
   {
     if(shape.type != shape_msgs::SolidPrimitive::BOX) {
       ROS_ERROR("Invalid object passed to push sampler - Only BOX/CUBE types are supported!");
       return false;
     }
     shape_ = shape;
+    object_frame_ = object_frame;
     object_ready_ = true;
     return true;
   }
@@ -95,6 +97,8 @@ namespace push_sampler
       sampleRandomPoseFromBox(shape_.dimensions[0],
                               shape_.dimensions[1],
                               shape_.dimensions[2]);
+
+    approach.frame_id = object_frame_;
     approach.point = approach_pose.position;
     approach.normal = approach_pose.orientation;
     approach.angle = sampleRandomPushAngle();

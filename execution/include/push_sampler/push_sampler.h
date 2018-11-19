@@ -56,8 +56,8 @@ namespace push_sampler
 
       bool setObject(const visualization_msgs::Marker& marker);
       bool setObject(const moveit_msgs::CollisionObject& object);
-      bool setObject(const shape_msgs::SolidPrimitive& shape);
-
+      bool setObject(const shape_msgs::SolidPrimitive& shape, const std::string& object_frame="");
+      void setObjectFrame(const std::string& object_frame) { object_frame_ = object_frame; };
 
       virtual bool sampleRandomPush(tams_ur5_push_msgs::Push& push) const;
       bool sampleRandomPushApproach(tams_ur5_push_msgs::PushApproach& approach) const;
@@ -71,6 +71,7 @@ namespace push_sampler
     protected:
 
       shape_msgs::SolidPrimitive shape_;
+      std::string object_frame_;
       bool object_ready_ = false;
 
       // basic shape sampling
