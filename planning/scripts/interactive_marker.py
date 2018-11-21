@@ -198,6 +198,7 @@ class EventHandler:
         self.menu_handler.insert( "Reset", callback=self.onReset )
         self.menu_handler.insert( "Execute", callback=self.onExecute )
         self.menu_handler.insert( "Run MPC", callback=self.onRunMPC )
+        self.menu_handler.insert( "Run multi-step MPC", callback=self.onRunMultiStepMPC )
 
         self.controls = controls
         self.controls.set_menu_handler(self.menu_handler)
@@ -310,6 +311,8 @@ class EventHandler:
             if self.execute_push(push):
                 attempts = 0 # reset attempts
                 step += 1 # increase trajectory step
+            else:
+                replan = True
 
             # query new object pose
             pose = self.controls.get_start_pose()
