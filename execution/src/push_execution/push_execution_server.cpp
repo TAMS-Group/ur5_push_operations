@@ -91,6 +91,7 @@ class PushExecutionServer {
         res.result = push_execution_->performPush(req.push, id_count_, execute_);
 
         if (push_execution_->isObjectColliding(0.02)) {
+          greedy_pushing_ = new GreedyPushing(push_execution_);
           geometry_msgs::Pose pose = push_execution_->getObjectPose();
           greedy_pushing_->pushTo(pose, pose, pose, false, 0.03);
           res.result = false;
@@ -313,7 +314,6 @@ class PushExecutionServer {
 
     push_execution_ = new PushExecution();
     isPusherAvailable();
-    greedy_pushing_ = new GreedyPushing(push_execution_);
     if(execute_ && take_snapshots_)
       push_execution_->enableSnapshots();
 
