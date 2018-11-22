@@ -208,7 +208,10 @@ namespace push_execution
                         robot_state::RobotState start_state = pusher_.getJointValueTarget();
 
                         // apply collision object before moving to pre_push
-                        applyCollisionObject();
+                        if( !applyCollisionObject()) {
+				ROS_ERROR_STREAM("Unable to set object as collision object in planning scene!");
+				return false;
+			}
                         if(!first_attempt_)
                             pusher_.setPathConstraints(get_pusher_down_constraints());
 
@@ -431,11 +434,11 @@ namespace push_execution
                 traj.getRobotTrajectoryMsg(trajectory_msg);
             }
 
-            void applyCollisionObject() {
+            bool applyCollisionObject() {
                 std_msgs::ColorRGBA color;
                 color.r = 0.5;
                 color.a = 0.5;
-                psi_.applyCollisionObject(obj_, color);
+                return psi_.applyCollisionObject(obj_, color);
             }
 
             void removeCollisionObject() {
