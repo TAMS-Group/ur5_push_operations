@@ -33,7 +33,6 @@
 
 //ROS
 #include <ros/ros.h>
-#include <tf/tf.h>
 #include <actionlib/server/simple_action_server.h>
 
 // MoveIt
@@ -152,6 +151,7 @@ namespace push_planning {
 
       bool can_steer_ = false;
 
+      std::string object_id_ = "pushable_object";
 
     public:
       PushPlannerActionServer(ros::NodeHandle& nh, ros::NodeHandle& pnh, const std::string& action) :
@@ -205,8 +205,10 @@ namespace push_planning {
         psm.startStateMonitor();
         psm.waitForCurrentRobotState(ros::Time::now());
         planning_scene::PlanningScenePtr scene(psm.getPlanningScene());
-        for (auto& cobj : cobjs)
-          scene->processCollisionObjectMsg(cobj.second);
+        for (auto& cobj : cobjs) {
+          if(cobj.first.find(object_id_) != 0)
+            scene->processCollisionObjectMsg(cobj.second);
+        }
         return scene;
       }
 

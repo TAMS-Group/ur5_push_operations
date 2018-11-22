@@ -37,7 +37,6 @@
 #include <ompl/base/spaces/SE2StateSpace.h>
 #include <ompl/base/StateValidityChecker.h>
 
-#include <tf/tf.h>
 #include <geometry_msgs/Quaternion.h>
 #include <geometry_msgs/Pose.h>
 
