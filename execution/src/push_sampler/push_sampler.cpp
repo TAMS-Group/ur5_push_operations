@@ -158,6 +158,22 @@ namespace push_sampler
     return pose;
   }
 
+  double PushSampler::getBoxApproachPivotFromPush(const tams_ur5_push_msgs::Push& push, double dim_x, double dim_y, double dim_z) {
+    geometry_msgs::Point point = push.approach.point;
+    point.x += 0.5 * dim_x;
+    point.y += 0.5 * dim_y;
+
+    // Match value with edge and create corresponding pose
+    if(point.y == 0.0)
+      return point.x;
+    else if (point.x == dim_x)
+      return point.y + dim_x;
+    else if (point.y == dim_y)
+      return 2 * dim_x + dim_y - point.x;
+    else
+      return 2 * (dim_x + dim_y) - point.y;
+  }
+
   double PushSampler::sampleRandomPushAngle(double range) {
     return 2 * range * unif_dist_(gen) - range;
   }

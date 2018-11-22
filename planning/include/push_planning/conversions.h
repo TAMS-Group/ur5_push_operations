@@ -48,12 +48,17 @@
 #include <tams_ur5_push_msgs/Push.h>
 #include <push_sampler/push_sampler.h>
 
+#include <cmath>
+
 #pragma once
 
 const double dimX = 0.162;
 const double dimY = 0.23;
 const double dimZ = 0.112;
 const std::string object_frame = "pushable_object_0";
+
+namespace ob = ompl::base;
+namespace oc = ompl::control;
 
 void convertControlToPush(const oc::Control *control, tams_ur5_push_msgs::Push& push) {
   const double* ctrl = control->as<oc::RealVectorControlSpace::ControlType>()->values;
@@ -66,6 +71,16 @@ void convertControlToPush(const oc::Control *control, tams_ur5_push_msgs::Push& 
   push.approach.angle = (ctrl[1] - 0.5) * 0.5 * M_PI;
   // normalize distance range to 0.0m-0.05m
   push.distance = ctrl[2] * 0.05;
+}
+
+void convertPushToControl(const tams_ur5_push_msgs::Push& push, oc::RealVectorControlSpace::ControlType *ctrl) {
+  //retrieve approach point from pivot and box dimensions
+  ctrl->values[1] = push_sampler::PushSampler::getBoxApproachPivotFromPush(push, dimX, dimY, dimZ);
+
+  // normalize angle to +- 45°
+  ctrl->values[1] = std::fmax(0.0, std::fmin(push.approach.angle * 2 / M_PI + 0.5, 1.0));
+  // normalize distance range to 0.0m-0.05m
+  ctrl->values[2] = std::fmax(0.0, std::fmin(push.distance / 0.05, 1.0));
 }
 
 void convertPoseToState(const geometry_msgs::Pose& pose, ob::ScopedState<ob::SE2StateSpace>& state){

@@ -1,6 +1,6 @@
 <launch>
 	<node pkg="tams_ur5_push_planning" type="push_planner_node" name="push_planner_node" output="screen">
-		<param name="spawn_collision_object_test" value="false"/>
+		<param name="spawn_collision_object_test" value="true"/>
     <rosparam command="load" file="$(find tams_ur5_push_planning)/config/planning.yaml"/>
 	</node>
 

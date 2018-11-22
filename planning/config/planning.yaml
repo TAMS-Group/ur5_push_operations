@@ -15,7 +15,7 @@ state_space_real_min: -0.3
 state_space_real_max: 0.3
 
 # control sampler
-control_sampler_iterations: 10
+control_sampler_iterations: 30
 
 # collision object
 #spawn_collision_object: false

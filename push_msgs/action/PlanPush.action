@@ -8,6 +8,8 @@ string object_id
 geometry_msgs/Pose start_pose
 geometry_msgs/Pose goal_pose
 
+Push last_push
+
 ---
 
 # The planned trajectory

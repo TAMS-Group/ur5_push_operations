@@ -66,6 +66,7 @@ namespace push_sampler
       // constrained sampling
       static geometry_msgs::Pose getPoseFromBoxBorder(double p, double dim_x, double dim_y, double dim_z);
       static geometry_msgs::Pose sampleConstrainedPoseFromBox(double p, const double &dim_x, const double &dim_y, const double &dim_z);
+      static double getBoxApproachPivotFromPush(const tams_ur5_push_msgs::Push& push, double dim_x, double dim_y, double dim_z);
 
 
     protected:

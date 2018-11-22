@@ -285,6 +285,7 @@ class EventHandler:
         replan = True
         attempts = 0
         step = 0
+        push = None
 
         # run MPC as long as goal is not reached and attempts
         while se2Distance(pose, goal) > 0.05 and attempts < 10 :
@@ -293,7 +294,7 @@ class EventHandler:
             if replan :
 
                 # call push plan action
-                plan = self.call_push_plan_action("object_id", pose, goal)
+                plan = self.call_push_plan_action("object_id", pose, goal, push)
                 step = 0
 
                 # highlight plan
@@ -330,13 +331,15 @@ class EventHandler:
             print("Service did not process request: " + str(e))
         return False
 
-    def call_push_plan_action(self, object_id, start_pose, goal_pose):
+    def call_push_plan_action(self, object_id, start_pose, goal_pose, push=None):
 
         #create goal
         goal = PlanPushGoal()
         goal.object_id = object_id
         goal.start_pose = start_pose
         goal.goal_pose = goal_pose
+        if push is not None:
+          goal.last_push = push
 
         print start_pose, goal_pose
 

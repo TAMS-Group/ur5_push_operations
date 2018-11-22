@@ -104,13 +104,13 @@ void spawnCollisionObject()
   shape_msgs::SolidPrimitive primitive;
   cobj.operation = cobj.ADD;
   primitive.type = primitive.BOX;
-  primitive.dimensions.push_back(0.03);
   primitive.dimensions.push_back(0.4);
+  primitive.dimensions.push_back(0.03);
   primitive.dimensions.push_back(0.2);
   cobj.primitives.push_back(primitive);
   geometry_msgs::Pose pose;
   pose.position.z = 0.101;
-  pose.position.y = -0.2;
+  pose.position.x = -0.2;
   pose.orientation.w = 1.0;
   cobj.primitive_poses.push_back(pose);
   psi.applyCollisionObject(cobj);
@@ -206,7 +206,7 @@ namespace push_planning {
         psm.waitForCurrentRobotState(ros::Time::now());
         planning_scene::PlanningScenePtr scene(psm.getPlanningScene());
         for (auto& cobj : cobjs) {
-          if(cobj.first.find(object_id_) != 0)
+          if(cobj.first.find(object_id_) > 1)
             scene->processCollisionObjectMsg(cobj.second);
         }
         return scene;
@@ -252,8 +252,13 @@ namespace push_planning {
           oc::DirectedControlSamplerAllocator sampler;
           if(strategy_ == DIRECTED)
             sampler = getControlSamplerAllocator<oc::SimpleDirectedControlSampler>();
-          if(strategy_ == CHAINED)
-            sampler = getControlSamplerAllocator<ChainedControlSampler>();
+          if(strategy_ == CHAINED) {
+            //sampler = getControlSamplerAllocator<ChainedControlSampler>();
+            oc::RealVectorControlSpace::ControlType* last_control;
+            convertPushToControl(goal->last_push, last_control);
+            sampler = [&](const oc::SpaceInformation* si){ return std::make_shared<ChainedControlSampler>(si, control_sampler_iterations_, last_control); };
+          }
+
 
           si = std::make_shared<oc::SpaceInformation>(cspace->getStateSpace(), cspace);
           si->setDirectedControlSamplerAllocator(sampler);

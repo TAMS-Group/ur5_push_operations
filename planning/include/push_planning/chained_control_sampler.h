@@ -38,6 +38,8 @@
 #include <ompl/control/spaces/RealVectorControlSpace.h>
 #include <ompl/control/SimpleDirectedControlSampler.h>
 
+#include <push_planning/conversions.h>
+
 namespace ob = ompl::base;
 namespace oc = ompl::control;
 
@@ -47,15 +49,17 @@ namespace push_planning {
 
       oc::ControlSamplerPtr cs_;
       unsigned int numControlSamples_;
+      const oc::Control* previous_init_control_;
 
       std::random_device rd;
       std::mt19937 gen{rd()};
       std::uniform_real_distribution<double> unif_dist_{-1.0, 1.0};
     public:
-      ChainedControlSampler(const oc::SpaceInformation *si, unsigned int k)
+      ChainedControlSampler(const oc::SpaceInformation *si, unsigned int k, const oc::Control* last_control)
         : oc::DirectedControlSampler(si),
         cs_(si->allocControlSampler()),
-        numControlSamples_(k)
+        numControlSamples_(k),
+        previous_init_control_(last_control)
     {
       }
 
@@ -74,7 +78,7 @@ namespace push_planning {
       unsigned int sampleTo(oc::Control *control, const ob::State *source,
           ob::State *dest)
       {
-        return getBestControl(control, source, dest, nullptr);
+        return getBestControl(control, source, dest, previous_init_control_);
       }
 
       unsigned int sampleTo(oc::Control *control, const oc::Control *previous,
