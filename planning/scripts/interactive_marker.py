@@ -62,6 +62,7 @@ def get_object_pose(object_frame, reference_frame):
             pose = Pose(Point(*p), Quaternion(*q))
     except (tf.LookupException, tf.ConnectivityException):
         print "Unable to retrieve object pose!"
+    del tf_l # kill listener to prevent annoying warnings
     return pose
 
 
