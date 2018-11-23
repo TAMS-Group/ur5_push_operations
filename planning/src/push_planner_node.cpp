@@ -104,13 +104,13 @@ void spawnCollisionObject()
   shape_msgs::SolidPrimitive primitive;
   cobj.operation = cobj.ADD;
   primitive.type = primitive.BOX;
-  primitive.dimensions.push_back(0.4);
+  primitive.dimensions.push_back(0.3);
   primitive.dimensions.push_back(0.03);
   primitive.dimensions.push_back(0.2);
   cobj.primitives.push_back(primitive);
   geometry_msgs::Pose pose;
   pose.position.z = 0.101;
-  pose.position.x = -0.2;
+  pose.position.x = -0.25;
   pose.orientation.w = 1.0;
   cobj.primitive_poses.push_back(pose);
   psi.applyCollisionObject(cobj);
