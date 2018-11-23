@@ -33,6 +33,7 @@
 
 
 #include <ros/ros.h>
+#include <cmath>
 #include <push_prediction/push_predictor.h>
 
 namespace push_prediction {
@@ -84,7 +85,10 @@ namespace push_prediction {
             input_vec.resize(5);
             input_vec(0) = push.approach.point.x;
             input_vec(1) = push.approach.point.y;
-            input_vec(2) = tf::getYaw(push.approach.normal);
+            double yaw = tf::getYaw(push.approach.normal);
+            yaw += M_PI / 2;
+            yaw = std::fmod(yaw, 1.5 * M_PI);
+            input_vec(2) = yaw - M_PI / 2;
             input_vec(3) = push.approach.angle;
             input_vec(4) = push.distance;
         } else
