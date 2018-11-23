@@ -254,8 +254,13 @@ namespace push_planning {
             sampler = getControlSamplerAllocator<oc::SimpleDirectedControlSampler>();
           if(strategy_ == CHAINED) {
             //sampler = getControlSamplerAllocator<ChainedControlSampler>();
-            oc::RealVectorControlSpace::ControlType* last_control;
-            convertPushToControl(goal->last_push, last_control);
+            oc::RealVectorControlSpace::ControlType* last_control = NULL;
+            if(goal->last_push.approach.frame_id != "") {
+              ROS_ERROR_STREAM("Reusing last push!");
+              last_control = new oc::RealVectorControlSpace::ControlType();
+              convertPushToControl(goal->last_push, last_control);
+              ROS_ERROR_STREAM("converted");
+            }
             sampler = [&](const oc::SpaceInformation* si){ return std::make_shared<ChainedControlSampler>(si, control_sampler_iterations_, last_control); };
           }
 
