@@ -82,19 +82,22 @@ class PushExecutionServer {
 
     bool executePush(tams_ur5_push_msgs::ExecutePush::Request& req, tams_ur5_push_msgs::ExecutePush::Response& res)
     {
-      ROS_INFO_STREAM("Received push request" << req);
+      ROS_ERROR_STREAM("Received push request" << req);
       res.result = false;
       if (!service_busy_ && isPusherAvailable()) {
         service_busy_ = true;
         id_count_++;
-        push_execution_->reset();
         res.result = push_execution_->performPush(req.push, id_count_, execute_);
+        ros::Duration(1.0).sleep();
 
-        if (push_execution_->isObjectColliding(0.02)) {
+        while (push_execution_->isObjectColliding(0.03)) {
           greedy_pushing_ = new GreedyPushing(push_execution_);
           geometry_msgs::Pose pose = push_execution_->getObjectPose();
-          greedy_pushing_->pushTo(pose, pose, pose, false, 0.03);
+          geometry_msgs::Pose collision_pose = push_execution_->getCollisionObjectPose("collision_object");
+          ROS_ERROR_STREAM("Pushing away from collision object!");
+          greedy_pushing_->pushTo(pose, collision_pose, pose, false, 0.05);
           res.result = false;
+          ros::Duration(0.5).sleep();
         }
         service_busy_ = false;
       }
