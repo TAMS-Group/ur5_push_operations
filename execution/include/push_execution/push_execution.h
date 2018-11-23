@@ -372,6 +372,20 @@ namespace push_execution
                 return obj_pose.pose;
             }
 
+            geometry_msgs::Pose getCollisionObjectPose(const std::string& obj_id, const std::string& target_frame="table_top")
+            {
+                moveit::planning_interface::PlanningSceneInterface psi;
+                geometry_msgs::Pose pose = psi.getObjectPoses({ obj_id })[obj_id];
+                std::string base_frame = pusher_.getPlanningFrame();
+                if(base_frame != target_frame) {
+                  tf::Transform target_to_base, base_to_object;
+                  tf::poseMsgToTF(getObjectPose(base_frame, target_frame), target_to_base);
+                  tf::poseMsgToTF(pose, base_to_object);
+                  tf::poseTFToMsg(target_to_base * base_to_object, pose);
+                }
+                return pose;
+            }
+
             Eigen::Affine3d getObjectTransform(const std::string& obj_frame, const std::string& target_frame="table_top")
             {
                 Eigen::Affine3d obj_pose_affine;
@@ -388,24 +402,46 @@ namespace push_execution
             }
 
             bool isObjectColliding(float padding=0.02) {
-                    moveit_msgs::AttachedCollisionObject obj;
-                    createCollisionObject(marker_, obj.object, padding);
-                    obj.object.id = "padded_collision_test_object";
-                    obj.link_name = "s_model_tool0";
-                    planning_scene::PlanningScenePtr scene(psm_.getPlanningScene());
-                    scene->processAttachedCollisionObjectMsg(obj);
-                    bool collision = scene->isStateColliding();
-                    obj.object.operation = moveit_msgs::CollisionObject::REMOVE;
-                    scene->processAttachedCollisionObjectMsg(obj);
-                    return collision;
+
+              psm_.waitForCurrentRobotState(ros::Time::now());
+              planning_scene::PlanningScenePtr scene(psm_.getPlanningScene());
+
+              moveit::planning_interface::PlanningSceneInterface psi;
+              std::map<std::string, moveit_msgs::CollisionObject> cobjs = psi.getObjects();
+
+              for (auto& cobj : cobjs) {
+                if(cobj.first.find(obj_.id) > 1)
+                  scene->processCollisionObjectMsg(cobj.second);
+              }
+
+              moveit_msgs::AttachedCollisionObject obj;
+              createCollisionObject(marker_, obj.object, padding);
+              obj.object.id = "padded_collision_test_object";
+              obj.link_name = "s_model_tool0";
+              obj.object.header.frame_id = "table_top";
+              obj.object.primitive_poses[0] = getObjectPose();
+              obj.object.primitive_poses[0].position.z += 0.001 + 0.5 * padding;
+              scene->processAttachedCollisionObjectMsg(obj);
+
+              bool collision = scene->isStateColliding();
+              std::vector<std::string> links;
+              scene->getCollidingLinks(links);
+              if(links.size() > 0) {
+                ROS_ERROR("Colliding links:");
+                for (auto link : links)
+                  ROS_ERROR_STREAM("" << link);
+              }
+              obj.object.operation = moveit_msgs::CollisionObject::REMOVE;
+              scene->processAttachedCollisionObjectMsg(obj);
+              return collision;
             }
 
             bool isPusherAvailable()
             {
-                if(!pusher_.isPusherAttached() && !pusher_.loadFromAttachedObject()) {
-                    return false;
-                }
-                return true;
+              if(!pusher_.isPusherAttached() && !pusher_.loadFromAttachedObject()) {
+                return false;
+              }
+              return true;
             }
 
         private:
