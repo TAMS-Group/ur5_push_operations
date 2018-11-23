@@ -75,8 +75,8 @@ void convertControlToPush(const oc::Control *control, tams_ur5_push_msgs::Push& 
 
 void convertPushToControl(const tams_ur5_push_msgs::Push& push, oc::RealVectorControlSpace::ControlType *ctrl) {
   //retrieve approach point from pivot and box dimensions
-  ctrl->values[1] = push_sampler::PushSampler::getBoxApproachPivotFromPush(push, dimX, dimY, dimZ);
-
+  ctrl->values = new double[3];
+  ctrl->values[0] = push_sampler::PushSampler::getBoxApproachPivotFromPush(push, dimX, dimY, dimZ);
   // normalize angle to +- 45°
   ctrl->values[1] = std::fmax(0.0, std::fmin(push.approach.angle * 2 / M_PI + 0.5, 1.0));
   // normalize distance range to 0.0m-0.05m
