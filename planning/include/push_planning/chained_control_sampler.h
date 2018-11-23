@@ -53,7 +53,7 @@ namespace push_planning {
 
       std::random_device rd;
       std::mt19937 gen{rd()};
-      std::uniform_real_distribution<double> unif_dist_{-1.0, 1.0};
+      std::normal_distribution<double> dist_{0.0, 0.5};
     public:
       ChainedControlSampler(const oc::SpaceInformation *si, unsigned int k, const oc::Control* last_control)
         : oc::DirectedControlSampler(si),
@@ -78,7 +78,7 @@ namespace push_planning {
       unsigned int sampleTo(oc::Control *control, const ob::State *source,
           ob::State *dest)
       {
-        return getBestControl(control, source, dest, previous_init_control_);
+        return getBestControl(control, source, dest, nullptr);
       }
 
       unsigned int sampleTo(oc::Control *control, const oc::Control *previous,
@@ -93,16 +93,15 @@ namespace push_planning {
       unsigned int getBestControl(oc::Control *control, const ob::State *source,
           ob::State *dest, const oc::Control *previous)
       {
-        double previous_approach;
+        cs_->sample(control, source);
+
+        double previous_approach = 0.0;
         // Sample the first control
         if (previous != nullptr) {
-          cs_->sampleNext(control, previous, source);
           previous_approach = previous->as<oc::RealVectorControlSpace::ControlType>()->values[0];
           if (previous_approach > 0.0)
-            control->as<oc::RealVectorControlSpace::ControlType>()->values[0] = std::fmod(unif_dist_(gen) * 0.1 + previous_approach, 1.0);
+            control->as<oc::RealVectorControlSpace::ControlType>()->values[0] = std::fmod(dist_(gen) * 0.1 + previous_approach, 1.0);
         }
-        else
-          cs_->sample(control, source);
 
         const unsigned int minDuration = si_->getMinControlDuration();
         const unsigned int maxDuration = si_->getMaxControlDuration();
@@ -121,15 +120,10 @@ namespace push_planning {
           // Sample k-1 more controls, and save the control that gets closest to target
           for (unsigned int i = 1; i < numControlSamples_; ++i)
           {
+            cs_->sample(tempControl, source);
+            if (previous_approach > 0.0)
+              tempControl->as<oc::RealVectorControlSpace::ControlType>()->values[0] = std::fmod(dist_(gen) * 0.1 + previous_approach, 1.0);
             unsigned int sampleSteps = cs_->sampleStepCount(minDuration, maxDuration);
-            if (previous != nullptr) {
-              cs_->sampleNext(tempControl, previous, source);
-              if (previous_approach > 0.0)
-                tempControl->as<oc::RealVectorControlSpace::ControlType>()->values[0] = std::fmod(unif_dist_(gen) * 0.1 + previous_approach, 1.0);
-            }
-            else
-              cs_->sample(tempControl, source);
-
             sampleSteps = si_->propagateWhileValid(source, tempControl, sampleSteps, tempState);
             double tempDistance = si_->distance(tempState, dest);
             if (tempDistance < bestDistance)
