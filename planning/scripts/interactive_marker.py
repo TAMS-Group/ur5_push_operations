@@ -288,10 +288,11 @@ class EventHandler:
         push = None
 
         # run MPC as long as goal is not reached and attempts
-        while se2Distance(pose, goal) > 0.05 and attempts < 10 :
+        while se2Distance(pose, goal) > 0.08 and attempts < 10 :
 
             # replan, if necessary
             if replan :
+                replan = False
 
                 # call push plan action
                 plan = self.call_push_plan_action("object_id", pose, goal, push)
@@ -319,7 +320,7 @@ class EventHandler:
             # query new object pose
             pose = self.controls.get_start_pose()
             # replan, if the object deviates from path
-            replan = se2Distance(pose, plan.trajectory.poses[step]) > 0.05
+            replan = replan or se2Distance(pose, plan.trajectory.poses[step]) > 0.1
 
 
     def execute_push(self, push):
