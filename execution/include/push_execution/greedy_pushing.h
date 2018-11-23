@@ -5,6 +5,8 @@
 #include <tams_ur5_push_msgs/Push.h>
 #include <push_util/util.h>
 
+#include <tf/transform_datatypes.h>
+
 namespace push_msgs = tams_ur5_push_msgs;
 
 namespace push_execution
@@ -19,12 +21,16 @@ namespace push_execution
 
     bool sampleTo(const geometry_msgs::Pose& start, const geometry_msgs::Pose& goal, push_msgs::Push& result, bool minimize=true)
     {
+      tf::Transform start_tf, pose_tf;
+      tf::poseMsgToTF(start, start_tf);
       push_msgs::Push push;
       geometry_msgs::Pose pose;
       double best_distance = se2distance(start, goal);
       for (int i=0;i<100;i++) {
         sampler_.sampleRandomPush(push);
         predictor_.predict(push, pose);
+        tf::poseMsgToTF(pose, pose_tf);
+        tf::poseTFToMsg(start_tf * pose_tf, pose);
         double distance = se2distance(pose, goal);
         if( minimize ^ distance > best_distance ) {
           best_distance = distance;
