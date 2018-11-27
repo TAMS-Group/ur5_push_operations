@@ -58,11 +58,14 @@ namespace push_prediction {
         tf::quaternionTFToMsg(tf::createQuaternionFromYaw(output_vec(2)), pose.orientation);
     }
 
-    PushPredictor::PushPredictor()
+    PushPredictor::PushPredictor(const std::string& model_file)
     {
-        //network_.load(ros::package::getPath("push_prediction") + "/scripts/keras_model.yaml");
-        network_.load(ros::package::getPath("tams_ur5_push_prediction") + "/models/model_with_distance.yaml");
+        network_.load(model_file);
     }
+
+    PushPredictor::PushPredictor()
+	    : PushPredictor::PushPredictor(ros::package::getPath("tams_ur5_push_prediction") + "/models/model_with_distance.yaml") {}
+
 
     void PushPredictor::setReuseSolutions(bool reuseSolutions) {
         reuseSolutions_ = reuseSolutions;

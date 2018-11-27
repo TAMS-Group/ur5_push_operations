@@ -64,6 +64,8 @@ namespace push_prediction {
         public:
             PushPredictor();
 
+            PushPredictor(const std::string& model_file);
+
             void setReuseSolutions(bool reuseSolutions);
 
             bool pushesEqual(const tams_ur5_push_msgs::Push& first, const tams_ur5_push_msgs::Push& second) {
