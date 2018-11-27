@@ -92,6 +92,7 @@ class PushExecutionServer {
 
         while (push_execution_->isObjectColliding(0.03)) {
           greedy_pushing_ = new GreedyPushing(push_execution_);
+          greedy_pushing_->setDistanceMode(GreedyPushing::DistanceMode::LINEAR);
           geometry_msgs::Pose pose = push_execution_->getObjectPose();
           geometry_msgs::Pose collision_pose = push_execution_->getCollisionObjectPose("collision_object");
           ROS_ERROR_STREAM("Pushing away from collision object!");
