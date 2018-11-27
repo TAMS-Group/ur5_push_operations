@@ -103,9 +103,8 @@ class PushExecutionClient {
     bool dump_feedback_;
     std::string dump_dir_;
 
-    PushExecutionClient(const std::string& dump_dir) : explorer_("explore_pushes_action"), mover_("move_object_action"), dump_dir_(dump_dir)
+    PushExecutionClient(const std::string& dump_dir, bool dump_feedback) : explorer_("explore_pushes_action"), mover_("move_object_action"), dump_feedback_(dump_feedback), dump_dir_(dump_dir)
   {
-    dump_feedback_ = true;
     if(dump_feedback_) {
       //TODO: check if file exists
       write_csv_header_pose(FN_PRE_POSES);
@@ -268,7 +267,7 @@ class PushOperations
 
   public:
 
-    PushOperations(const std::string& push_result_dir) : arm_("arm"), gripper_("gripper"), pec_(push_result_dir){
+    PushOperations(const std::string& push_result_dir, bool dump_feedback) : arm_("arm"), gripper_("gripper"), pec_(push_result_dir, dump_feedback){
 
       ros::NodeHandle nh;
       pusher_movements_ = nh.serviceClient<tams_ur5_push_msgs::PusherMovement>("point_at_box");

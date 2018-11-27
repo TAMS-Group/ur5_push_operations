@@ -66,7 +66,9 @@ int main(int argc, char** argv) {
     return 1;
   }
 
-  PushOperations op(push_result_dir);
+  bool dump_feedback;
+  nh.param("dump_feedback", dump_feedback, true);
+  PushOperations op(push_result_dir, dump_feedback);
 
   std::cout << "========================================" << std::endl;
   std::cout << std::endl << "Launching Push operator bringup" << std::endl;
