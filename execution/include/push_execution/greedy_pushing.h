@@ -86,15 +86,22 @@ namespace push_execution
     push_prediction::PushPredictor predictor_;
     DistanceMode distance_mode_ = SE2;
 
-    bool sampleTo(const geometry_msgs::Pose& start, const geometry_msgs::Pose& goal, push_msgs::Push& result, bool minimize=true)
+    bool sampleTo(const geometry_msgs::Pose& start, geometry_msgs::Pose goal, push_msgs::Push& result, bool minimize=true)
     {
+      // transform goal to start pose
+      tf::Transform start_tf, goal_tf;
+      tf::poseMsgToTF(start, start_tf);
+      tf::poseMsgToTF(goal, goal_tf);
+      tf::poseTFToMsg(start_tf.inverse() * goal_tf, goal);
+
       push_msgs::Push push;
       geometry_msgs::Pose pose;
-      double best_distance = se2Distance(start, goal);
+      pose.orientation.w = 1.0;
+      double best_distance = getDistance(pose, goal);
       for (int i=0;i<100;i++) {
         sampler_.sampleRandomPush(push);
         predictor_.predict(push, pose);
-        double distance = se2Distance(pose, goal);
+        double distance = getDistance(pose, goal);
         if( minimize ^ distance > best_distance ) {
           best_distance = distance;
           result = push;
@@ -102,7 +109,7 @@ namespace push_execution
       }
     }
 
-    double distance(const geometry_msgs::Pose& start, const geometry_msgs::Pose& goal){
+    double getDistance(const geometry_msgs::Pose& start, const geometry_msgs::Pose& goal){
 	    if(distance_mode_ == LINEAR)
 		    return linearDistance(start, goal);
 	    if(distance_mode_ == YAW)
