@@ -25,8 +25,9 @@ find_package(catkin REQUIRED COMPONENTS
   eigen_conversions)
 
 
-catkin_package(INCLUDE_DIRS
-  include)
+catkin_package(
+	INCLUDE_DIRS include
+	LIBRARIES push_sampler)
 
 #set(PROJECT_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
@@ -42,8 +43,7 @@ add_library(pusher src/push_execution/pusher.cpp)
 add_library(push_sampler src/push_sampler/exploration_sampler.cpp src/push_sampler/push_sampler.cpp)
 
 add_executable(push_execution src/push_execution/push_execution_server.cpp)
-target_link_libraries(push_execution ${catkin_LIBRARIES} pusher push_sampler push_predictor)
-add_dependencies(push_execution ${catkin_EXPORTED_TARGETS})
+target_link_libraries(push_execution ${catkin_LIBRARIES} pusher push_sampler)
 
 ## Declare a C++ library
 add_executable(cli src/cli/cli.cpp)
