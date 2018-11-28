@@ -56,7 +56,7 @@ namespace push_execution
       : execution_(execution)
     {
       sampler_.setObject(execution->getObjectMarker());
-    };
+    }
 
     void setDistanceMode(const DistanceMode mode)
     {
