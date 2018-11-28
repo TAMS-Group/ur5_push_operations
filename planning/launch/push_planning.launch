@@ -1,10 +1,12 @@
 <launch>
+	<arg name="demo" default="false"/>
 	<node pkg="tams_ur5_push_planning" type="push_planner_node" name="push_planner_node" output="screen">
 		<param name="spawn_collision_object_test" value="true"/>
-    <rosparam command="load" file="$(find tams_ur5_push_planning)/config/planning.yaml"/>
+		<param name="prediction_model" value="$(find tams_ur5_push_prediction)/models/models_with_distance.yaml"/>
+		<rosparam command="load" file="$(find tams_ur5_push_planning)/config/planning.yaml"/>
 	</node>
 
 	<node pkg="tams_ur5_push_planning" type="interactive_marker.py" name="push_planner_interaction" output="screen">
-		<param name="interactive_start_state" value="false"/>
+		<param name="interactive_start_state" value="$(arg demo)"/>
 	</node>
 </launch>
