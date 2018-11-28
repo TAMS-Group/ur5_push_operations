@@ -59,11 +59,11 @@ namespace push_planning {
 
     public:
 
-      PushStatePropagator(const oc::SpaceInformationPtr &si, bool canSteer=false) : oc::StatePropagator(si),
+      PushStatePropagator(const oc::SpaceInformationPtr &si, push_prediction::PushPredictor& predictor, bool canSteer=false) : oc::StatePropagator(si),
       si_(si),
       cs_(si->allocControlSampler()),
       canSteer_(canSteer),
-      predictor_(new push_prediction::PushPredictor())
+      predictor_(&predictor)
     {
       predictor_->setReuseSolutions(true);
     }

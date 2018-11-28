@@ -277,7 +277,8 @@ namespace push_planning {
         }
 
         // set state propagator
-        oc::StatePropagatorPtr propagator(std::make_shared<PushStatePropagator>(si, can_steer_));
+        push_prediction::PushPredictor predictor;
+        oc::StatePropagatorPtr propagator(std::make_shared<PushStatePropagator>(si, predictor, can_steer_));
         setup->setStatePropagator(propagator);
 
         // initialize StateValidityChecker with updated planning scene
