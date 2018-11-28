@@ -83,12 +83,22 @@ class PushExecutionServer {
     bool executePush(tams_ur5_push_msgs::ExecutePush::Request& req, tams_ur5_push_msgs::ExecutePush::Response& res)
     {
       ROS_ERROR_STREAM("Received push request" << req);
-      res.result = false;
-      if (!service_busy_ && isPusherAvailable()) {
-        service_busy_ = true;
-        id_count_++;
-        res.result = push_execution_->performPush(req.push, id_count_, execute_);
-        ros::Duration(1.0).sleep();
+      if(service_busy_) {
+        ROS_ERROR_STREAM("ExecutePush request denied, service is busy!");
+        return false;
+      }
+
+      if(!isPusherAvailable()) {
+        ROS_ERROR_STREAM("ExecutePush request denied, pusher is not available!");
+        return false;
+      }
+
+      service_busy_ = true;
+      id_count_++;
+      res.result = push_execution_->performPush(req.push, id_count_, execute_);
+
+      if(res.result) {
+        ros::Duration(0.5).sleep();
 
         while (push_execution_->isObjectColliding(0.03)) {
           greedy_pushing_ = new GreedyPushing(push_execution_);
@@ -100,8 +110,8 @@ class PushExecutionServer {
           res.result = false;
           ros::Duration(0.5).sleep();
         }
-        service_busy_ = false;
       }
+      service_busy_ = false;
       return res.result;
     }
 
