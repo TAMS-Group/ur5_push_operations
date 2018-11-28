@@ -64,7 +64,7 @@ namespace push_prediction {
     }
 
     PushPredictor::PushPredictor()
-	    : PushPredictor::PushPredictor(ros::package::getPath("tams_ur5_push_prediction") + "/models/model_with_distance.yaml") {}
+	    : PushPredictor(ros::package::getPath("tams_ur5_push_prediction") + "/models/model_with_distance.yaml"){}
 
 
     void PushPredictor::setReuseSolutions(bool reuseSolutions) {
