@@ -56,6 +56,7 @@
 #include <ompl/control/SimpleDirectedControlSampler.h>
 
 #include <ompl/control/planners/rrt/RRT.h>
+#include <ompl/geometric/planners/rrt/RRT.h>
 // #include <ompl/control/planners/kpiece/KPIECE1.h>
 // #include <ompl/control/planners/est/EST.h>
 // #include <ompl/control/planners/syclop/SyclopRRT.h>
@@ -76,6 +77,7 @@
 
 namespace ob = ompl::base;
 namespace oc = ompl::control;
+namespace og = ompl::geometric;
 namespace push_msgs = tams_ur5_push_msgs;
 
 ros::Publisher traj_pub_, graph_pub_;
@@ -97,6 +99,7 @@ void publishPlannerData(const ompl::base::PlannerData& data)
 
 void spawnCollisionObject()
 {
+  ROS_ERROR_STREAM("Spawn it");
   moveit::planning_interface::PlanningSceneInterface psi;
   moveit_msgs::CollisionObject cobj;
   cobj.id = "collision_object";
@@ -157,7 +160,8 @@ namespace push_planning {
       PushPlannerActionServer(ros::NodeHandle& nh, ros::NodeHandle& pnh, const std::string& action) :
         nh_(nh),
         pnh_(pnh),
-        as_(nh_, action, boost::bind(&PushPlannerActionServer::planCB, this, _1), false)
+        as_(nh_, action, boost::bind(&PushPlannerActionServer::planInStateSpace, this, _1), false)
+        //as_(nh_, action, boost::bind(&PushPlannerActionServer::planCB, this, _1), false)
     {
       loadParams();
       as_.start();
@@ -211,6 +215,60 @@ namespace push_planning {
         }
         return scene;
       }
+
+      void planInStateSpace(const push_msgs::PlanPushGoalConstPtr& goal)
+      {
+
+        // extract goal request (not used atm)
+        //const std::string& object_id = goal->object_id;
+
+        // construct a SE2 state space 
+        // and set the bounds for the R^2 part of SE(2) state space
+        auto space(std::make_shared<ob::SE2StateSpace>());
+        ob::RealVectorBounds bounds(2);
+        bounds.setLow(state_space_real_min_);
+        bounds.setHigh(state_space_real_max_);
+        space->setBounds(bounds);
+
+        ob::SpaceInformationPtr si(new ob::SpaceInformation(space));
+
+        // initialize StateValidityChecker with updated planning scene
+        ob::StateValidityCheckerPtr checker(
+            std::make_shared<PushStateValidityChecker>(si, getPlanningScene()));
+        si->setStateValidityChecker(checker);
+        si->setup();
+
+        // create start and goal states
+        ob::ScopedState<ob::SE2StateSpace> start_state(space);
+        convertPoseToState(goal->start_pose, start_state);
+        ob::ScopedState<ob::SE2StateSpace> goal_state(space);
+        convertPoseToState(goal->goal_pose, goal_state);
+
+        ob::ProblemDefinitionPtr problem(new ob::ProblemDefinition(si));
+        problem->setStartAndGoalStates(start_state, goal_state);
+
+        ob::PlannerPtr planner(new og::RRT(si));
+        planner->setProblemDefinition(problem);
+        planner->setup();
+
+        push_msgs::PlanPushResult result;
+        if (planner->solve(planning_time_)) {
+
+          // return solution
+          ob::PlannerData data(si);
+          planner->getPlannerData(data);
+          plannerDataToGraphMsg(data, result.planner_data);
+          controlPathToPushTrajectoryMsg(problem->getSolutionPath()->as<og::PathGeometric>(), result.trajectory);
+          as_.setSucceeded(result);
+
+        } else {
+
+          // return error message
+          result.error_message = "No solution found";
+          as_.setAborted(result);
+        }
+      }
+
 
       void planCB(const push_msgs::PlanPushGoalConstPtr& goal)
       {
@@ -321,6 +379,8 @@ int main(int argc, char** argv)
 
   ros::NodeHandle nh;
   ros::NodeHandle pnh("~");
+
+  ros::Duration(5).sleep();
 
   if(pnh.param<bool>("spawn_collision_object_test", false))
     spawnCollisionObject();

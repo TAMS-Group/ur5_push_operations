@@ -173,6 +173,32 @@ class PushExecutionServer {
       service_busy_ = false;
     }
 
+    void acceptMoveObjectGoalGreedy()
+    {
+      tams_ur5_push_msgs::MoveObjectResult result;
+      if(service_busy_) {
+        ROS_ERROR("Push Execution cannot move object to goal - service busy!");
+        move_object_server_.setAborted(result);
+        return;
+      }
+
+      if(!isPusherAvailable()) {
+        ROS_ERROR("Push Execution cannot move object to goal - Pusher is not available!");
+        move_object_server_.setAborted(result);
+        return;
+      }
+
+      service_busy_ = true;
+
+      tams_ur5_push_msgs::MoveObjectGoal goal = (*move_object_server_.acceptNewGoal());
+      greedy_pushing_ = new GreedyPushing(push_execution_);
+      greedy_pushing_->setDistanceMode(GreedyPushing::DistanceMode::SE2);
+      greedy_pushing_->setPreventCollision(true);
+      greedy_pushing_->pushObjectToGoal(goal.target);
+      move_object_server_.setSucceeded();
+      service_busy_ = false;
+    }
+
     void acceptMoveObjectGoal()
     {
       tams_ur5_push_msgs::MoveObjectGoal goal = (*move_object_server_.acceptNewGoal());
@@ -339,7 +365,7 @@ class PushExecutionServer {
           acceptExplorePushesGoal();
         }
         if(move_object_server_.isNewGoalAvailable()) {
-          acceptMoveObjectGoal();
+          acceptMoveObjectGoalGreedy();
         }
       }
       rate.sleep();

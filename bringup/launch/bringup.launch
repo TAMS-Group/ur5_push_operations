@@ -1,4 +1,6 @@
 <launch>
+	<node name="rviz" pkg="rviz" type="rviz" respawn="false" output="log" args="-d $(find tams_ur5_push_bringup)/launch/bringup.rviz"/>
+
 	<param name="push_result_directory" command="$(find tams_ur5_push_bringup)/scripts/create_dump_dirs.sh"/>
 
 	<include file="$(find tams_ur5_push_bringup)/launch/ur5_setup_bringup.launch">

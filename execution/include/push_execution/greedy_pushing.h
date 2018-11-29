@@ -63,10 +63,37 @@ namespace push_execution
       distance_mode_ = mode;
     }
 
+    void setPreventCollision(bool prevent_collision)
+    {
+      prevent_collision_ = prevent_collision;
+    }
+
+    void pushObjectToGoal(const geometry_msgs::Pose& goal, double goal_threshold=0.05)
+    {
+      pushObjectToGoal(execution_->getObjectPose(), goal, goal_threshold);
+    }
+
     void pushObjectToGoal(geometry_msgs::Pose start, const geometry_msgs::Pose& goal, double goal_threshold=0.05)
     {
-      while (se2Distance(start, goal) > goal_threshold)
+      while (se2Distance(start, goal) > goal_threshold) {
         pushTo(start, goal, start);
+
+        // let execution update object poses
+        ros::Duration(0.1).sleep();
+
+        // if collision prevention is enabled, push away from object
+        while(prevent_collision_ && execution_->isObjectColliding(0.03)) {
+          DistanceMode last_mode = distance_mode_;
+          setDistanceMode(GreedyPushing::DistanceMode::LINEAR);
+          geometry_msgs::Pose pose;
+          pushTo(execution_->getObjectPose(), execution_->getCollisionObjectPose("collision_object"), pose, false, 0.05);
+          distance_mode_ = last_mode;
+          ros::Duration(0.1).sleep();
+        }
+
+        // save update object pose
+        start = execution_->getObjectPose();
+      }
     }
 
     void pushTo(const geometry_msgs::Pose& start, const geometry_msgs::Pose& goal, geometry_msgs::Pose result, bool minimize=true, double distance=0.0) {
@@ -85,6 +112,7 @@ namespace push_execution
     push_sampler::PushSampler sampler_;
     push_prediction::PushPredictor predictor_;
     DistanceMode distance_mode_ = SE2;
+    bool prevent_collision_ = false;
 
     bool sampleTo(const geometry_msgs::Pose& start, geometry_msgs::Pose goal, push_msgs::Push& result, bool minimize=true)
     {

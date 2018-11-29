@@ -33,6 +33,7 @@
 
 #pragma once
 
+#include <ompl/base/SpaceInformation.h>
 #include <ompl/control/SpaceInformation.h>
 #include <ompl/base/spaces/SE2StateSpace.h>
 #include <ompl/base/StateValidityChecker.h>
@@ -71,11 +72,11 @@ static moveit_msgs::AttachedCollisionObject obj = createObject();
 class PushStateValidityChecker : public ob::StateValidityChecker
 {
   private:
-    const oc::SpaceInformationPtr si_;
+    const ob::SpaceInformationPtr si_;
     const planning_scene::PlanningScenePtr scene_;
 
   public:
-    PushStateValidityChecker(const oc::SpaceInformationPtr &si, const planning_scene::PlanningScenePtr scene)
+    PushStateValidityChecker(const ob::SpaceInformationPtr &si, const planning_scene::PlanningScenePtr scene)
       : ob::StateValidityChecker(si), si_(si), scene_(scene)
     {  }
 

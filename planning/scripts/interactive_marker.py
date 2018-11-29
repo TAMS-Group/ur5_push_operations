@@ -196,6 +196,7 @@ class EventHandler:
 
         self.menu_handler = MenuHandler()
         self.menu_handler.insert( "Plan", callback=self.onPlan )
+        self.menu_handler.insert( "Follow Path", callback=self.onFollowPath )
         self.menu_handler.insert( "Reset", callback=self.onReset )
         self.menu_handler.insert( "Execute", callback=self.onExecute )
         self.menu_handler.insert( "Run MPC", callback=self.onRunMPC )
@@ -207,6 +208,7 @@ class EventHandler:
         self.controls.reset_markers(True)
 
         self.planner_client = actionlib.SimpleActionClient('/push_plan_action', PlanPushAction)
+        self.move_client = actionlib.SimpleActionClient('/move_object_action', MoveObjectAction)
 
         rospy.wait_for_service("push_execution")
         self.execute_service = rospy.ServiceProxy("push_execution", ExecutePush)
@@ -232,6 +234,23 @@ class EventHandler:
         # hide markers
         self.highlight_solution = True
         self.controls.reset_markers(False)
+
+    def onFollowPath( self, feedback ):
+        pose = self.controls.get_start_pose()
+
+        if self.solution is None :
+            print "Unable to follow path. No plan found!"
+            return
+
+        poses = self.solution.trajectory.poses
+
+        if len(poses) < 2 :
+            print "Unable to follow path. No waypoints to follow"
+            return
+
+        for pose in poses:
+            self.call_move_to_target_action(pose)
+
 
     def onReset( self, feedback ):
         print "reset"
@@ -332,6 +351,15 @@ class EventHandler:
             print("Service did not process request: " + str(e))
         return False
 
+    def call_move_to_target_action(self, target_pose):
+        goal = MoveObjectGoal()
+        goal.target = target_pose
+
+        self.move_client.wait_for_server()
+        self.move_client.send_goal(goal)
+        self.move_client.wait_for_result()
+        return True
+
     def call_push_plan_action(self, object_id, start_pose, goal_pose, push=None):
 
         #create goal
@@ -353,6 +381,7 @@ class EventHandler:
         result = self.planner_client.get_result()
 
         self.plan_viz.visualize_trajectory(result.trajectory)
+        print result.trajectory
         self.plan_viz.visualize_graph(result.planner_data)
         return result
 

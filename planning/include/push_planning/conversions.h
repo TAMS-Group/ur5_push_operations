@@ -102,7 +102,6 @@ void convertStateToPose(const ob::State *state, geometry_msgs::Pose& pose) {
   tf::quaternionTFToMsg(tf::createQuaternionFromYaw(se2state->getYaw()), pose.orientation);
 }
 
-
 void controlPathToPushTrajectoryMsg(const ompl::control::PathControl& solution, tams_ur5_push_msgs::PushTrajectory& traj_msg) {
   traj_msg.steps = solution.getStateCount();
   traj_msg.poses.resize(traj_msg.steps);
@@ -113,6 +112,15 @@ void controlPathToPushTrajectoryMsg(const ompl::control::PathControl& solution, 
 
     if ( i < traj_msg.pushes.size() )
       convertControlToPush(solution.getControl(i), traj_msg.pushes[i]);
+  }
+}
+
+void controlPathToPushTrajectoryMsg(const ompl::geometric::PathGeometric* solution, tams_ur5_push_msgs::PushTrajectory& traj_msg) {
+  traj_msg.steps = solution->getStateCount();
+  traj_msg.poses.resize(traj_msg.steps);
+
+  for(int i = 0; i < traj_msg.steps; i++) {
+    convertStateToPose(solution->getState(i), traj_msg.poses[i]);
   }
 }
 
