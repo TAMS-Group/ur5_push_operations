@@ -1,5 +1,5 @@
 <launch>
-	<include  file="$(find tams_ur5_push_planning)/launch/planning.launch">
+	<include  file="$(find tams_ur5_push_planning)/launch/push_planning.launch">
 		<arg name="demo" value="true"/>
 	</include>
 </launch>
