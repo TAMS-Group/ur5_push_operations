@@ -154,14 +154,15 @@ namespace push_planning {
 
       bool can_steer_ = false;
 
+      bool use_control_planner_ = true;
+
       std::string object_id_ = "pushable_object";
 
     public:
       PushPlannerActionServer(ros::NodeHandle& nh, ros::NodeHandle& pnh, const std::string& action) :
         nh_(nh),
         pnh_(pnh),
-        as_(nh_, action, boost::bind(&PushPlannerActionServer::planInStateSpace, this, _1), false)
-        //as_(nh_, action, boost::bind(&PushPlannerActionServer::planCB, this, _1), false)
+        as_(nh_, action, boost::bind(&PushPlannerActionServer::planCB, this, _1), false)
     {
       loadParams();
       as_.start();
@@ -175,6 +176,8 @@ namespace push_planning {
         else if(strategy == "STEERED") strategy_ = STEERED;
         else if(strategy == "CHAINED") strategy_ = CHAINED;
         else if(strategy != "RANDOM") ROS_WARN("Unknown planning strategy: '%s'", strategy.c_str());
+
+        can_steer_ = strategy_ == STEERED;
 
         // planner setup
         pnh_.param("planning_time", planning_time_, 300.0);
@@ -191,7 +194,8 @@ namespace push_planning {
 
         // control sampler
         pnh_.param("control_sampler_iterations", control_sampler_iterations_, 10);
-        can_steer_ = strategy_ == STEERED;
+
+        pnh_.param("use_control_planner", use_control_planner_, true);
       }
 
 
@@ -214,6 +218,13 @@ namespace push_planning {
             scene->processCollisionObjectMsg(cobj.second);
         }
         return scene;
+      }
+
+      void planCB(const push_msgs::PlanPushGoalConstPtr& goal) {
+	      if(use_control_planner_)
+		      planInControlSpace(goal);
+	      else
+		      planInStateSpace(goal);
       }
 
       void planInStateSpace(const push_msgs::PlanPushGoalConstPtr& goal)
@@ -270,7 +281,7 @@ namespace push_planning {
       }
 
 
-      void planCB(const push_msgs::PlanPushGoalConstPtr& goal)
+      void planInControlSpace(const push_msgs::PlanPushGoalConstPtr& goal)
       {
 
         // extract goal request (not used atm)

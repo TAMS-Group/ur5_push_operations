@@ -1,7 +1,4 @@
-# planning strategy (RANDOM, STEERED, DIRECTED, CHAINED)
-planning_strategy: CHAINED
-
-# planner setup
+## planner setup
 planning_time: 300.0
 goal_accuracy: 0.05
 goal_bias: 0.5
@@ -13,6 +10,12 @@ set_intermediate_states: true
 # state space
 state_space_real_min: -0.35
 state_space_real_max: 0.35
+
+## if set to false, the planner uses geometric state space planning
+use_control_planner: true
+
+# planning strategy (RANDOM, STEERED, DIRECTED, CHAINED)
+planning_strategy: CHAINED
 
 # control sampler
 control_sampler_iterations: 30
