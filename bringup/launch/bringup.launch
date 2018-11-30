@@ -30,4 +30,5 @@
 		<param name="emergency_range" value="0.3" />
 	</node>
 
+	<include file="$(find tams_ur5_push_planning)/launch/push_planning.launch"/>
 </launch>
