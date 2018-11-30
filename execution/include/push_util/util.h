@@ -48,7 +48,8 @@ double yawDistance(const geometry_msgs::Pose& start, const geometry_msgs::Pose& 
 	tf::Quaternion q_start, q_goal;
 	tf::quaternionMsgToTF(start.orientation, q_start);
 	tf::quaternionMsgToTF(goal.orientation, q_goal);
-	return fmod(tf::getYaw(q_start.inverse() * q_goal), 2*M_PI);
+	double yaw = fmod(abs(tf::getYaw(q_start.inverse() * q_goal)), 2 * M_PI);
+	return yaw > M_PI ? 2 * M_PI - yaw : yaw;
 }
 
 double se2Distance(const geometry_msgs::Pose& start, const geometry_msgs::Pose& goal) {
