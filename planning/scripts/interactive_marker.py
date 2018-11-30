@@ -340,7 +340,7 @@ class EventHandler:
             # query new object pose
             pose = self.controls.get_start_pose()
             # replan, if the object deviates from path
-            replan = replan or se2Distance(pose, plan.trajectory.poses[step]) > 0.1
+            replan = replan or se2Distance(pose, plan.trajectory.poses[step]) > 0.15
 
 
     def execute_push(self, push):
