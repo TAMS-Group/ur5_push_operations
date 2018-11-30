@@ -248,7 +248,8 @@ class EventHandler:
             print "Unable to follow path. No waypoints to follow"
             return
 
-        for pose in poses:
+        for pose in poses[1:]:
+            print "Moving to pose", pose
             self.call_move_to_target_action(pose)
 
 
