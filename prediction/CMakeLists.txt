@@ -28,9 +28,10 @@ include_directories(include
 )
 
 
-add_executable(push_predictor_test src/push_predictor.cpp)
-target_link_libraries(push_predictor_test ${catkin_LIBRARIES} yaml-cpp)
-add_dependencies(push_predictor_test ${catkin_EXPORTED_TARGETS} ${${PROJECT_NAME}_EXPORTED_TARGETS})
+# add_executable(push_predictor_test src/push_predictor.cpp)
+# target_link_libraries(push_predictor_test ${catkin_LIBRARIES} yaml-cpp)
+# add_dependencies(push_predictor_test ${catkin_EXPORTED_TARGETS} ${${PROJECT_NAME}_EXPORTED_TARGETS})
+
 add_library(push_predictor src/push_predictor.cpp)
 target_link_libraries(push_predictor ${catkin_LIBRARIES} yaml-cpp)
 add_dependencies(push_predictor ${catkin_EXPORTED_TARGETS} ${${PROJECT_NAME}_EXPORTED_TARGETS})

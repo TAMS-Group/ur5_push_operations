@@ -116,25 +116,26 @@ namespace push_prediction {
     }
 }
 
-int main(int argc, char** argv)
-{
-    push_prediction::PushPredictor predictor;
-    tams_ur5_push_msgs::Push push;
-    push.approach.point.x = -0.081;
-    push.approach.point.y = -0.05;
-    push.approach.normal.w = 1.0;
-    push.approach.angle = 0.0;
-    push.distance = 0.01;
-    geometry_msgs::Pose pose;
-    predictor.predict(push, pose);
-    ROS_INFO_STREAM("Push: " << push << ", Pose: " << pose);
-    /*
-    ros::Time::init();
-    ros::Time start_time = ros::Time::now();
-    for(int i = 0;i<100000; i++) {
-        predictor.predict(push, pose);
-    }
-    ROS_INFO_STREAM("That took " << (ros::Time::now() - start_time) << "seconds");
-    */
-    return 0;
-}
+// For testing purposes
+// int main(int argc, char** argv)
+// {
+//     push_prediction::PushPredictor predictor;
+//     tams_ur5_push_msgs::Push push;
+//     push.approach.point.x = -0.081;
+//     push.approach.point.y = -0.05;
+//     push.approach.normal.w = 1.0;
+//     push.approach.angle = 0.0;
+//     push.distance = 0.01;
+//     geometry_msgs::Pose pose;
+//     predictor.predict(push, pose);
+//     ROS_INFO_STREAM("Push: " << push << ", Pose: " << pose);
+//     /*
+//     ros::Time::init();
+//     ros::Time start_time = ros::Time::now();
+//     for(int i = 0;i<100000; i++) {
+//         predictor.predict(push, pose);
+//     }
+//     ROS_INFO_STREAM("That took " << (ros::Time::now() - start_time) << "seconds");
+//     */
+//     return 0;
+// }
