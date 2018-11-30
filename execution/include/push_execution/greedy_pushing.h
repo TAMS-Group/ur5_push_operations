@@ -75,25 +75,28 @@ namespace push_execution
 
     void pushObjectToGoal(geometry_msgs::Pose start, const geometry_msgs::Pose& goal, double goal_threshold=0.05)
     {
-      while (se2Distance(start, goal) > goal_threshold) {
+      while (getDistance(start, goal) > goal_threshold) {
+        ROS_ERROR_STREAM("Distance: " << getDistance(start, goal));
         pushTo(start, goal, start);
 
         // let execution update object poses
-        ros::Duration(0.1).sleep();
+        ros::Duration(0.5).sleep();
 
         // if collision prevention is enabled, push away from object
         while(prevent_collision_ && execution_->isObjectColliding(0.03)) {
+          ROS_ERROR_STREAM("Found collision - pushing away from object!");
           DistanceMode last_mode = distance_mode_;
           setDistanceMode(GreedyPushing::DistanceMode::LINEAR);
           geometry_msgs::Pose pose;
           pushTo(execution_->getObjectPose(), execution_->getCollisionObjectPose("collision_object"), pose, false, 0.05);
           distance_mode_ = last_mode;
-          ros::Duration(0.1).sleep();
+          ros::Duration(0.5).sleep();
         }
 
         // save update object pose
         start = execution_->getObjectPose();
       }
+      ROS_ERROR_STREAM("Done with distance: " << getDistance(start, goal));
     }
 
     void pushTo(const geometry_msgs::Pose& start, const geometry_msgs::Pose& goal, geometry_msgs::Pose result, bool minimize=true, double distance=0.0) {
