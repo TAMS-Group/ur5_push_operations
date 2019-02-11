@@ -32,6 +32,7 @@
 /* Author: Lars Henning Kayser */
 
 
+#include <ros/ros.h>
 #include <push_sampler/push_sampler.h>
 
 std::random_device rd;
@@ -39,6 +40,13 @@ std::mt19937 gen{rd()};
 std::uniform_real_distribution<double> unif_dist_{0.0,1.0};
 namespace push_sampler
 {
+  PushSampler::PushSampler()
+  {
+    ros::NodeHandle pnh("~");
+    pnh.param("min_push_distance", min_push_distance_, 0.005);
+    pnh.param("min_push_distance", max_push_distance_, 0.03);
+    pnh.param("push_angle_range", push_angle_range_, 0.5);
+  }
 
   bool PushSampler::setObject(const visualization_msgs::Marker& marker)
   {
@@ -85,7 +93,7 @@ namespace push_sampler
 
   bool PushSampler::sampleRandomPush(tams_ur5_push_msgs::Push& push) const
   {
-    push.distance = sampleRandomPushDistance();
+    push.distance = sampleRandomPushDistance(min_push_distance_, max_push_distance_);
     return sampleRandomPushApproach(push.approach);
   }
 
@@ -101,7 +109,7 @@ namespace push_sampler
     approach.frame_id = object_frame_;
     approach.point = approach_pose.position;
     approach.normal = approach_pose.orientation;
-    approach.angle = sampleRandomPushAngle();
+    approach.angle = sampleRandomPushAngle(push_angle_range_);
     return true;
   }
 

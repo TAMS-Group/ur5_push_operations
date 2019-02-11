@@ -1,34 +1,48 @@
 <launch>
+	<!-- enable push planning service -->
+	<arg name="planning_enabled" default="false"/>
+
+	<!-- run rviz -->
 	<node name="rviz" pkg="rviz" type="rviz" respawn="false" output="log" args="-d $(find tams_ur5_push_bringup)/launch/bringup.rviz"/>
 
+	<!-- create directory for dumping exploration data -->
 	<param name="push_result_directory" command="$(find tams_ur5_push_bringup)/scripts/create_dump_dirs.sh"/>
 
+	<!-- use constraint database -->
+	<param name="move_group/constraint_approximations_path" value="$(find tams_ur5_push_bringup)/cadb"/>
+
+	<!-- robot bringup -->
 	<include file="$(find tams_ur5_push_bringup)/launch/ur5_setup_bringup.launch">
 		<arg name="ur5_joint_ranges_config" value="$(find tams_ur5_push_bringup)/config/elbow_up-restricted.yaml"/>
 		<arg name="ur5_floating_table" value="false"/>
 	</include>
 
-	<param name="move_group/constraint_approximations_path" value="$(find tams_ur5_push_bringup)/cadb"/>
-
+	<!-- localize object -->
 	<include file="$(find tams_ur5_push_object_localization)/launch/object_localization.launch">
 		<arg name="demo_mode" value="false"/>
 	</include>
 
+	<!-- dump images -->
 	<node pkg="tams_ur5_push_object_localization" type="image_dump_service" name="image_dump_service"/>
 
+	<!-- execution+exploration pipeline -->
 	<node pkg="tams_ur5_push_execution" type="push_execution" name="push_execution_service">
 		<param name="take_snapshots" value="true"/>
 		<param name="execute" value="true"/>
 
-		<!-- Sampling parameters -->
-		<param name="min_table_distance" value="0.02" />
-
+		<!-- pusher tip measures -->
 		<param name="tip_length" value="0.08" />
 		<param name="tip_radius" value="0.004" />
-
+                <!-- exploration safety parameters -->
 		<param name="safety_range" value="0.05" />
 		<param name="emergency_range" value="0.3" />
+		<param name="min_table_distance" value="0.02" />
+                <!-- sampling ranges -->
+		<param name="min_push_distance" value="0.005" />
+		<param name="max_push_distance" value="0.03" />
+		<param name="push_angle_range" value="0.5" /> <!-- total push angle range in rad -->
 	</node>
 
-	<include file="$(find tams_ur5_push_planning)/launch/push_planning.launch"/>
+	<!-- planning pipeline -->
+	<include file="$(find tams_ur5_push_planning)/launch/push_planning.launch" if="$(arg planning_enabled)"/>
 </launch>

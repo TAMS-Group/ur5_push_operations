@@ -37,22 +37,17 @@
 #include <moveit_msgs/CollisionObject.h>
 #include <shape_msgs/SolidPrimitive.h>
 
-
 #include <tams_ur5_push_msgs/Push.h>
 #include <tams_ur5_push_msgs/PushApproach.h>
 
 #pragma once
 
-
-
-
 namespace push_sampler
 {
-
   class PushSampler
   {
     public:
-      PushSampler() {};
+      PushSampler();
 
       bool setObject(const visualization_msgs::Marker& marker);
       bool setObject(const moveit_msgs::CollisionObject& object);
@@ -68,12 +63,13 @@ namespace push_sampler
       static geometry_msgs::Pose sampleConstrainedPoseFromBox(double p, const double &dim_x, const double &dim_y, const double &dim_z);
       static double getBoxApproachPivotFromPush(const tams_ur5_push_msgs::Push& push, double dim_x, double dim_y, double dim_z);
 
-
     protected:
-
       shape_msgs::SolidPrimitive shape_;
       std::string object_frame_;
       bool object_ready_ = false;
+      double min_push_distance_;
+      double max_push_distance_;
+      double push_angle_range_;
 
       // basic shape sampling
       static double sampleRandomPushAngle(double range=0.5);

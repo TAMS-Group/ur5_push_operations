@@ -50,7 +50,7 @@ namespace push_sampler
       return false;
 
     push.approach.frame_id = object_frame_;
-    push.distance = sampleRandomPushDistance();
+    push.distance = sampleRandomPushDistance(min_push_distance_, max_push_distance_);
     adjustContactHeight(push);
     return true;
   }
