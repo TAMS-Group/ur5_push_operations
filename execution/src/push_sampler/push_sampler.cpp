@@ -44,7 +44,7 @@ namespace push_sampler
   {
     ros::NodeHandle pnh("~");
     pnh.param("min_push_distance", min_push_distance_, 0.005);
-    pnh.param("min_push_distance", max_push_distance_, 0.03);
+    pnh.param("max_push_distance", max_push_distance_, 0.03);
     pnh.param("push_angle_range", push_angle_range_, 0.5);
   }
 
