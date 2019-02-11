@@ -24,10 +24,12 @@
 
 	<!-- dump images -->
 	<node pkg="tams_ur5_push_object_localization" type="image_dump_service" name="image_dump_service"/>
+	<node pkg="tams_ur5_push_object_localization" type="ft_dump_service" name="ft_dump_service"/>
 
 	<!-- execution+exploration pipeline -->
 	<node pkg="tams_ur5_push_execution" type="push_execution" name="push_execution_service">
 		<param name="take_snapshots" value="true"/>
+		<param name="record_ft_data" value="true"/>
 		<param name="execute" value="true"/>
 
 		<!-- pusher tip measures -->

@@ -66,6 +66,7 @@ class PushExecutionServer {
     bool service_busy_ = false;
     bool execute_= false;
     bool take_snapshots_ = false;
+    bool record_ft_data_ = false;
 
     int id_count_ = 0;
 
@@ -347,6 +348,7 @@ class PushExecutionServer {
   {
     ros::NodeHandle pnh("~");
     pnh.param("take_snapshots", take_snapshots_, false);
+    pnh.param("record_ft_data", record_ft_data_, false);
     pnh.param("execute", execute_, false);
     point_service_ = nh.advertiseService("point_at_box", &PushExecutionServer::pointAtBox, this);
     push_execution_service_ = nh.advertiseService("push_execution", &PushExecutionServer::executePush, this);
@@ -354,8 +356,13 @@ class PushExecutionServer {
 
     push_execution_ = new PushExecution();
     isPusherAvailable();
-    if(execute_ && take_snapshots_)
-      push_execution_->enableSnapshots();
+    if(execute_)
+    {
+      if(take_snapshots_)
+        push_execution_->enableSnapshots();
+      if(record_ft_data_)
+        push_execution_->enableFTData();
+    }
 
 
     ros::Rate rate(2);

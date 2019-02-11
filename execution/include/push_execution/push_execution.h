@@ -60,6 +60,7 @@
 #include <tams_ur5_push_msgs/Push.h>
 #include <tams_ur5_push_msgs/PushApproach.h>
 #include <tams_ur5_push_msgs/ImageDump.h>
+#include <tams_ur5_push_msgs/FTDump.h>
 
 #include <std_msgs/Float64.h>
 
@@ -98,7 +99,9 @@ namespace push_execution
             Pusher pusher_;
 
             ros::ServiceClient snapshot_client_;
+            ros::ServiceClient ft_client_;
             bool take_snapshots_ = false;
+            bool record_ft_data_ = false;
 
             tf::TransformListener tf_listener_;
 
@@ -142,9 +145,17 @@ namespace push_execution
             }
 
             void disableSnapshots() {
-                take_snapshots_ = true;
+                take_snapshots_ = false;
             }
 
+            void enableFTData() {
+                ft_client_ = nh_.serviceClient<push_msgs::FTDump>("/ft_dump_service");
+                record_ft_data_ = true;
+            }
+
+            void disableFTData() {
+                record_ft_data_ = false;
+            }
 
             bool performRandomPush(push_msgs::ExplorePushesFeedback& feedback, bool execute_plan=true)
             {
@@ -312,6 +323,8 @@ namespace push_execution
 
                             if(take_snapshots_)
                                 take_snapshot(std::to_string(attempt_id) + "_1_before");
+                            if(record_ft_data_)
+                                record_ft_data("ft_data_" + std::to_string(attempt_id), true);
 
                             // EXECUTE PUSH
                             pusher_.execute(push_plan);
@@ -321,6 +334,9 @@ namespace push_execution
 
                             if(take_snapshots_)
                                 take_snapshot(std::to_string(attempt_id) + "_3_after");
+
+                            if(record_ft_data_)
+                                record_ft_data("ft_data_" + std::to_string(attempt_id), false);
 
                             // retreat trajectory
                             pusher_.getCurrentState()->copyJointGroupPositions("arm", retreat_traj.joint_trajectory.points[0].positions);
@@ -502,6 +518,14 @@ namespace push_execution
                 push_msgs::ImageDump srv;
                 srv.request.filename = filename;
                 snapshot_client_.call(srv);
+            }
+
+            void record_ft_data(const std::string& filename, bool enabled)
+            {
+                push_msgs::FTDump srv;
+                srv.request.filename = filename;
+                srv.request.enabled = enabled;
+                ft_client_.call(srv);
             }
 
             moveit_msgs::Constraints get_pusher_down_constraints() {

@@ -31,6 +31,7 @@ add_service_files(
   PredictPush.srv
   SteerPush.srv
   ImageDump.srv
+  FTDump.srv
   )
 
 generate_messages(
