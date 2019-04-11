@@ -135,7 +135,7 @@ namespace push_execution
             }
 
             bool performRandomPush(bool execute_plan=false) {
-              push_msgs::ExplorePushesFeedback fb;
+                push_msgs::ExplorePushesFeedback fb;
                 return performRandomPush(fb, execute_plan);
             }
 
@@ -159,33 +159,41 @@ namespace push_execution
 
             bool performRandomPush(push_msgs::ExplorePushesFeedback& feedback, bool execute_plan=true)
             {
-              push_msgs::Push push;
+                push_msgs::Push push;
                 ros::Duration(0.5).sleep();
                 if (isObjectClear() && createRandomPushMsg(push)) {
-                    feedback.push = push;
-                    tf::poseEigenToMsg(getObjectTransform(push.approach.frame_id), feedback.pre_push);
-                    bool success = performPush(push, feedback.id, execute_plan);
-                    // Observe Relocation
-                    tf::poseEigenToMsg(getObjectTransform(push.approach.frame_id), feedback.post_push);
-                    return success;
-                } else {
-                    return false;
+                    try {
+                        feedback.push = push;
+                        tf::poseEigenToMsg(getObjectTransform(push.approach.frame_id), feedback.pre_push);
+                        bool success = performPush(push, feedback.id, execute_plan);
+                        // Observe Relocation
+                        tf::poseEigenToMsg(getObjectTransform(push.approach.frame_id), feedback.post_push);
+                        return success;
+                    }
+                    catch (tf::TransformException transform_exception){
+                        ROS_ERROR_STREAM("Invalid transform exception in push execution " << transform_exception.what());
+                    }
                 }
+                return false;
             }
 
             bool performPush(const push_msgs::Push& push, push_msgs::MoveObjectFeedback& feedback, bool execute_plan=true)
             {
                 ros::Duration(0.5).sleep();
                 if (isObjectClear()) {
-                    feedback.push = push;
-                    tf::poseEigenToMsg(getObjectTransform(push.approach.frame_id), feedback.pre_push);
-                    bool success = performPush(push, feedback.id, execute_plan);
-                    // Observe Relocation
-                    tf::poseEigenToMsg(getObjectTransform(push.approach.frame_id), feedback.post_push);
-                    return success;
-                } else {
-                    return false;
+                    try {
+                        feedback.push = push;
+                        tf::poseEigenToMsg(getObjectTransform(push.approach.frame_id), feedback.pre_push);
+                        bool success = performPush(push, feedback.id, execute_plan);
+                        // Observe Relocation
+                        tf::poseEigenToMsg(getObjectTransform(push.approach.frame_id), feedback.post_push);
+                        return success;
+                    }
+                    catch (tf::TransformException transform_exception){
+                        ROS_ERROR_STREAM("Invalid transform exception in push execution " << transform_exception.what());
+                    }
                 }
+                return false;
             }
 
             bool performPush(const push_msgs::Push& push, int attempt_id=0, bool execute_plan=true)
@@ -196,7 +204,11 @@ namespace push_execution
                     pusher_.setPlanningTime(5.0);
 
                     //remove collision object in case the last attempt failed
-                    removeCollisionObject();
+                    if (!removeCollisionObject())
+                    {
+                        ROS_ERROR_STREAM("Unable to remove collision object " << obj_.id);
+                        return false;
+                    }
 
                     // declare plan and start state
                     moveit::planning_interface::MoveGroupInterface::Plan push_plan;
@@ -220,9 +232,9 @@ namespace push_execution
 
                         // apply collision object before moving to pre_push
                         if( !applyCollisionObject()) {
-				ROS_ERROR_STREAM("Unable to set object as collision object in planning scene!");
-				return false;
-			}
+                            ROS_ERROR_STREAM("Unable to set object as collision object in planning scene!");
+                            return false;
+                        }
                         if(!first_attempt_)
                             pusher_.setPathConstraints(get_pusher_down_constraints());
 
@@ -230,7 +242,7 @@ namespace push_execution
                         moveit::planning_interface::MoveGroupInterface::Plan move_to_box;
                         pusher_.setStartStateToCurrentState();
                         if(!pusher_.plan(move_to_box)) {
-                            ROS_ERROR("Failed planning of movement to box!");
+                            ROS_ERROR("Failed planning of movement to push object!");
                             return false;
                         }
 
@@ -258,14 +270,18 @@ namespace push_execution
                         pusher_.clearPathConstraints();
 
                         // allow object collision
-                        removeCollisionObject();
+                        if (!removeCollisionObject())
+                        {
+                            ROS_ERROR_STREAM("Unable to remove collision object " << obj_.id);
+                            return false;
+                        }
 
                         // plan push
                         can_push = computeCartesianPushTraj(waypoints, distances, approach_traj, push_traj, retreat_traj, start_state);
 
                         // wait for trajectory to finish
                         while(is_executing) {
-                            ROS_ERROR_THROTTLE(1, "Moving to approach pose.");
+                            ROS_INFO_THROTTLE(1, "Moving to approach pose.");
                         }
                         pusher_.setStartStateToCurrentState();
                         if(trajectory_execution_result_code != moveit_msgs::MoveItErrorCodes::SUCCESS) {
@@ -365,8 +381,7 @@ namespace push_execution
                 pusher_.setPusherPoseTarget(pose);
                 applyCollisionObject();
                 bool success = bool(pusher_.move());
-                removeCollisionObject();
-                return success;
+                return removeCollisionObject();
             }
 
             void reset()
@@ -376,14 +391,23 @@ namespace push_execution
 
             geometry_msgs::Pose getObjectPose()
             {
-                return getObjectPose(marker_.header.frame_id);
+                return getObjectPose(marker_.header);
             }
 
-            geometry_msgs::Pose getObjectPose(const std::string& obj_frame, const std::string& target_frame="table_top")
+            geometry_msgs::Pose getObjectPose(const std::string& frame_id, const std::string& target_frame="table_top")
+            {
+                std_msgs::Header obj_header;
+                obj_header.frame_id = frame_id;
+                obj_header.stamp = ros::Time::now();
+                return getObjectPose(obj_header, target_frame);
+            }
+
+            geometry_msgs::Pose getObjectPose(const std_msgs::Header& obj_pose_header, const std::string& target_frame="table_top")
             {
                 geometry_msgs::PoseStamped obj_pose;
-                obj_pose.header.frame_id = obj_frame;
+                obj_pose.header = obj_pose_header;
                 obj_pose.pose.orientation.w = 1.0;
+                tf_listener_.waitForTransform(target_frame, obj_pose.header.frame_id, obj_pose.header.stamp, ros::Duration(1.0));
                 tf_listener_.transformPose(target_frame, obj_pose, obj_pose);
                 return obj_pose.pose;
             }
@@ -405,7 +429,10 @@ namespace push_execution
             Eigen::Affine3d getObjectTransform(const std::string& obj_frame, const std::string& target_frame="table_top")
             {
                 Eigen::Affine3d obj_pose_affine;
-                tf::poseMsgToEigen(getObjectPose(obj_frame, target_frame), obj_pose_affine);
+                std_msgs::Header obj_header;
+                obj_header.frame_id = obj_frame;
+                obj_header.stamp = ros::Time::now();
+                tf::poseMsgToEigen(getObjectPose(obj_header, target_frame), obj_pose_affine);
                 return obj_pose_affine;
             }
 
@@ -493,10 +520,16 @@ namespace push_execution
                 return psi_.applyCollisionObject(obj_, color);
             }
 
-            void removeCollisionObject() {
-                std::vector<std::string> object_ids;
-                object_ids.push_back(obj_.id);
-                psi_.removeCollisionObjects(object_ids);
+            bool removeCollisionObject() {
+                if (!psi_.getObjects({obj_.id}).empty())
+                {
+                    moveit_msgs::CollisionObject obj;
+                    obj.id = obj_.id;
+                    obj.operation = moveit_msgs::CollisionObject::REMOVE;
+                    return psi_.applyCollisionObject(obj);
+                }
+                ROS_INFO_STREAM("Can't remove object " << obj_.id << ". It's not present in the planning scene");
+                return true;
             }
 
             bool createRandomPushMsg(push_msgs::Push& push) {
@@ -685,7 +718,7 @@ namespace push_execution
                     }
                     if(success) {
                         ros::Duration planning_time = ros::Time::now() - start_time;
-                        ROS_ERROR_STREAM("ComputePushTrajectory finished after " << planning_time.toSec() << " seconds.");
+                        ROS_INFO_STREAM("ComputePushTrajectory finished after " << planning_time.toSec() << " seconds.");
                         approach_traj = trajectories[0];
                         push_traj = trajectories[1];
                         retreat_traj = trajectories[2];
