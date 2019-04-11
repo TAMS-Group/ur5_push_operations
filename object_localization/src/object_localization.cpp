@@ -234,22 +234,22 @@ class ObjectLocalizationNode {
             if(!demo_mode_) {
                 //get only yaw part of detected pose
                 yaw = tf::getYaw(pose.orientation) + 0.5*M_PI;
-                try {
-                    XmlRpc::XmlRpcValue& val = objects_[marker.id].begin()->second;
-                    double x_off = val["tag_offset"]["x"];
-                    double y_off = val["tag_offset"]["y"];
-                    pose.position.x += x_off;
-                    pose.position.y += y_off;
-                } catch (XmlRpc::XmlRpcException& e) {
-                    ROS_WARN_STREAM("Error extracting values of object " << marker.id << " from configuration file!");
-                    ROS_WARN("%s", e.getMessage().c_str());
-                }
+
             }
             pose.orientation = tf::createQuaternionMsgFromYaw(yaw);
             pose.position.z = 0.5 * marker.scale.z;
-            tf::Transform transform;
-            tf::poseMsgToTF(pose, transform);
-            //return tf::StampedTransform(transform, detection_time_, "/table_top", object_frame_prefix_ + std::to_string(marker.id));
+	    tf::Transform transform;
+	    tf::poseMsgToTF(pose, transform);
+	    try {
+		    XmlRpc::XmlRpcValue& val = objects_[marker.id].begin()->second;
+		    double x_off = val["tag_offset"]["x"];
+		    double y_off = val["tag_offset"]["y"];
+		    transform.setOrigin(transform * tf::Vector3(x_off, y_off, 0.0));
+	    } catch (XmlRpc::XmlRpcException& e) {
+		    ROS_WARN_STREAM("Error extracting values of object " << marker.id << " from configuration file!");
+		    ROS_WARN("%s", e.getMessage().c_str());
+	    }
+	    //return tf::StampedTransform(transform, detection_time_, "/table_top", object_frame_prefix_ + std::to_string(marker.id));
             return transform;
         }
 };
