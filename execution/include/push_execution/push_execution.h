@@ -40,7 +40,6 @@
 #include <moveit_msgs/CollisionObject.h>
 #include <moveit_msgs/ExecuteTrajectoryActionResult.h>
 
-
 #include <moveit/trajectory_processing/iterative_spline_parameterization.h>
 #include <moveit/robot_state/robot_state.h>
 #include <moveit/robot_trajectory/robot_trajectory.h>
@@ -63,13 +62,16 @@
 #include <tams_ur5_push_msgs/FTDump.h>
 
 #include <std_msgs/Float64.h>
-
+#include <XmlRpcValue.h>
+#include <XmlRpcException.h>
 
 #pragma once
 
 
 
 const double TIP_RADIUS = 0.004;
+const double RETREAT_HEIGHT = 0.05;
+const double APPROACH_DISTANCE = 0.05;
 
 std::string MARKER_TOPIC = "/pushable_objects";
 
@@ -113,6 +115,8 @@ namespace push_execution
             bool first_attempt_ = true;
 
             double tip_radius_;
+            double retreat_height_;
+            double approach_distance_;
 
         public:
             PushExecution(bool execute_plan=false, const std::string& group_name="arm") : psm_("robot_description"), pusher_(group_name){
@@ -126,6 +130,25 @@ namespace push_execution
                 dist2_pub_ = nh_.advertise<std_msgs::Float64>("/joint_distances/post_push", 100);
 
                 pnh_.param("tip_radius", tip_radius_, TIP_RADIUS);
+                pnh_.param("retreat_height", retreat_height_, RETREAT_HEIGHT);
+                pnh_.param("approach_distance", approach_distance_, APPROACH_DISTANCE);
+                int object_id;
+                pnh_.param<int>("object_id", object_id, 0);
+                ros::NodeHandle nh;
+                XmlRpc::XmlRpcValue objects;
+                nh_.getParam("objects", objects);
+                if (object_id > 0 && objects.size() > object_id)
+                {
+                  try {
+                    if (objects[object_id].begin()->second.hasMember("retreat_height"))
+                      retreat_height_ = objects[object_id].begin()->second["retreat_height"];
+                    if (objects[object_id].begin()->second.hasMember("approach_distance"))
+                      approach_distance_ = objects[object_id].begin()->second["approach_distance"];
+                  } catch (XmlRpc::XmlRpcException& e) {
+                    ROS_WARN_STREAM("Error extracting values of object " << object_id << " from configuration file!");
+                    ROS_WARN("%s", e.getMessage().c_str());
+                  }
+                }
 
                 push_sampler_.setReferenceFrame("/table_top");
 
@@ -646,8 +669,8 @@ namespace push_execution
                 approach_affine = obj_pose_affine * approach_affine * direction;
 
                 //trajectory distances
-                float approach_distance = 0.05;
-                float retreat_height = marker_.scale.z + 0.05;
+                float approach_distance = approach_distance_;
+                float retreat_height = marker_.scale.z + retreat_height_;
 
                 // fill waypoints
                 geometry_msgs::Pose start_wp, approach_wp, push_wp, retreat_low_wp, retreat_high_wp;

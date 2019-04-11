@@ -2,12 +2,12 @@
 <launch>
 
     <arg name="demo_mode" default="true"/>
+    <arg name="object_id" default="0"/>
 
     <node pkg="tams_ur5_push_object_localization" type="object_localization" name="object_localization" output="screen">
-        <rosparam command="load" file="$(find tams_ur5_push_bringup)/config/objects.yaml" />
         <!-- demo mode activates a single fixed transform at <0,0,0> in the (table_top) frame -->
         <param name="demo_mode" value="$(arg demo_mode)"/>
-        <param name="object_id" value="0"/>
+        <param name="object_id" value="$(arg object_id)"/>
         <!-- <param name="object_frame_id" value="/object_frame_id"/> -->
         <!-- timeout is not used yet -->
         <!-- <param name="timeout" value="10"/> -->

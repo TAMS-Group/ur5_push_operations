@@ -31,9 +31,10 @@
 
 /* Author: Lars Henning Kayser */
 
-
 #include <ros/ros.h>
 #include <push_sampler/push_sampler.h>
+#include <XmlRpcValue.h>
+#include <XmlRpcException.h>
 
 std::random_device rd;
 std::mt19937 gen{rd()};
@@ -46,6 +47,26 @@ namespace push_sampler
     pnh.param("min_push_distance", min_push_distance_, 0.005);
     pnh.param("max_push_distance", max_push_distance_, 0.03);
     pnh.param("push_angle_range", push_angle_range_, 0.5);
+    // load object specific parameters
+    int object_id;
+    pnh.param<int>("object_id", object_id, 0);
+    ros::NodeHandle nh;
+    XmlRpc::XmlRpcValue objects;
+    nh.getParam("objects", objects);
+    if (object_id > 0 && objects.size() > object_id)
+    {
+      try {
+        if (objects[object_id].begin()->second.hasMember("min_push_distance"))
+          min_push_distance_ = objects[object_id].begin()->second["min_push_distance"];
+        if (objects[object_id].begin()->second.hasMember("max_push_distance"))
+          max_push_distance_ = objects[object_id].begin()->second["max_push_distance"];
+        if (objects[object_id].begin()->second.hasMember("push_angle_range"))
+          push_angle_range_ = objects[object_id].begin()->second["push_angle_range"];
+      } catch (XmlRpc::XmlRpcException& e) {
+        ROS_WARN_STREAM("Error extracting values of object " << object_id << " from configuration file!");
+        ROS_WARN("%s", e.getMessage().c_str());
+      }
+    }
   }
 
   bool PushSampler::setObject(const visualization_msgs::Marker& marker)

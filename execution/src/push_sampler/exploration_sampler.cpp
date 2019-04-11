@@ -32,6 +32,8 @@
 /* Author: Lars Henning Kayser */
 
 #include <push_sampler/exploration_sampler.h>
+#include <XmlRpcValue.h>
+#include <XmlRpcException.h>
 
 namespace push_sampler
 {
@@ -43,6 +45,28 @@ namespace push_sampler
     pnh.param("safety_range", safety_range_, SAFETY_RANGE);
     pnh.param("emergency_range", emergency_range_, EMERGENCY_RANGE);
     pnh.param("tip_length", tip_length_, TIP_LENGTH);
+    // load object specific parameters
+    int object_id;
+    pnh.param<int>("object_id", object_id, 0);
+    ros::NodeHandle nh;
+    XmlRpc::XmlRpcValue objects;
+    nh.getParam("objects", objects);
+    if (object_id > 0 && objects.size() > object_id)
+    {
+      try {
+        if (objects[object_id].begin()->second.hasMember("min_table_distance"))
+          min_table_distance_ = objects[object_id].begin()->second["min_table_distance"];
+        if (objects[object_id].begin()->second.hasMember("max_table_distance"))
+          max_table_distance_ = objects[object_id].begin()->second["max_table_distance"];
+        if (objects[object_id].begin()->second.hasMember("safety_range"))
+          safety_range_ = objects[object_id].begin()->second["safety_range"];
+        if (objects[object_id].begin()->second.hasMember("emergency_range"))
+          emergency_range_ = objects[object_id].begin()->second["emergency_range"];
+      } catch (XmlRpc::XmlRpcException& e) {
+        ROS_WARN_STREAM("Error extracting values of object " << object_id << " from configuration file!");
+        ROS_WARN("%s", e.getMessage().c_str());
+      }
+    }
   }
 
   bool ExplorationSampler::sampleRandomPush(tams_ur5_push_msgs::Push& push)

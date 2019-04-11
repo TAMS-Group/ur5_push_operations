@@ -2,41 +2,50 @@
 # object type is one of CUBE, SPHERE, CYLIINDER, MESH
 objects:
 # simple cardboard box
-  - object:
-      type: CUBE
-      tag_id: 352
-      tag_offset: {x: 0.0, y: 0.0, z: 0.056}
-      scale: {x: 0.162, y: 0.23, z: 0.112}
-#  # hammer
-#  - object:
-#      type: CUBE
-#      tag_id: 400
-#      tag_offset: {x: 0.0, y: 0.0, z: 0.014}
-#      scale: {x: 0.05, y: 0.05, z: 0.05}
-#  # blue can 'Maxwell House'
-#  - object:
-#      type: CUBE
-#      tag_id: 401
-#      tag_offset: {x: 0.0, y: 0.0, z: 0.07}
-#      scale: {x: 0.105, y: 0.105, z: 0.14}
-  # pan
-  - object:
-      type: CUBE
-      tag_id: 402
-      tag_offset: {x: 0.0, y: -0.105, z: 0.0525}
-      scale: {x: 0.26, y: 0.47, z: 0.105}
-  # bottle 'soft scrub'
-  - object:
-      type: CUBE
-      tag_id: 403
-      tag_offset: {x: 0.0, y: 0.0, z: 0.034}
-      scale: {x: 0.07, y: 0.07, z: 0.07}
-  # nylon spring clamp
-  - object:
-      type: CUBE
-      tag_id: 404
-      tag_offset: {x: 0.0, y: 0.0, z: 0.0}
-      scale: {x: 0.06, y: 0.06, z: 0.06}
+ - object:
+     type: CUBE
+     tag_id: 352
+     tag_offset: {x: 0.0, y: 0.0, z: 0.056}
+     scale: {x: 0.162, y: 0.23, z: 0.112}
+     min_table_distance: 0.02
+     max_table_distance: 0.112
+ # hammer
+ - object:
+     type: CUBE
+     tag_id: 400
+     tag_offset: {x: 0.0, y: 0.0, z: 0.014}
+     scale: {x: 0.05, y: 0.05, z: 0.05}
+ # blue can 'Maxwell House'
+ - object:
+     type: CUBE
+     tag_id: 401
+     tag_offset: {x: 0.0, y: 0.0, z: 0.07}
+     scale: {x: 0.105, y: 0.105, z: 0.14}
+ # pan
+ - object:
+     type: CUBE
+     tag_id: 402
+     tag_offset: {x: 0.0, y: -0.105, z: 0.0525}
+     scale: {x: 0.26, y: 0.47, z: 0.105}
+     min_table_distance: 0.02
+     max_table_distance: 0.025
+     safety_range: 0.2
+     min_push_distance: 0.05
+     max_push_distance: 0.2
+     retreat_height: 0.1
+     approach_distance: 0.05
+ # bottle 'soft scrub'
+ - object:
+     type: CUBE
+     tag_id: 403
+     tag_offset: {x: 0.0, y: 0.0, z: 0.034}
+     scale: {x: 0.07, y: 0.07, z: 0.07}
+ # nylon spring clamp
+ - object:
+     type: CUBE
+     tag_id: 404
+     tag_offset: {x: 0.0, y: 0.0, z: 0.0}
+     scale: {x: 0.06, y: 0.06, z: 0.06}
 #  - object:
 #      type: MESH
 #      mesh: '<path_to_mesh>'

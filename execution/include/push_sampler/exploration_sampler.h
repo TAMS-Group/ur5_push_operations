@@ -44,8 +44,8 @@ namespace push_sampler
   const float TIP_LENGTH = 0.08;
 
   // Range to restrict the object on the table
-  const float SAFETY_RANGE = 0.03; // Outside of this range the object is pushed towards the center
-  const float EMERGENCY_RANGE = 0.3; // Outside of this range the experiment is aborted
+  const double SAFETY_RANGE = 0.03; // Outside of this range the object is pushed towards the center
+  const double EMERGENCY_RANGE = 0.3; // Outside of this range the experiment is aborted
 
   class ExplorationSampler : public PushSampler
   {
@@ -61,8 +61,8 @@ namespace push_sampler
       void setAttemptCount(int attempts) { attempts_ = attempts; };
 
     private:
-      float safety_range_;
-      float emergency_range_;
+      double safety_range_;
+      double emergency_range_;
 
       double min_table_distance_;
       double max_table_distance_;

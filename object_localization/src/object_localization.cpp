@@ -133,7 +133,7 @@ class ObjectLocalizationNode {
 
         void loadParams(){
             // object descriptions and topic
-            ph_.getParam("objects", objects_);
+            nh_.getParam("objects", objects_);
             ph_.param<std::string>("object_frame_prefix_", object_frame_prefix_, "/pushable_object_");
 
             // demo parameters
@@ -141,8 +141,7 @@ class ObjectLocalizationNode {
             ph_.param<int>("demo_object_id_", demo_object_id_, 0);
 
             // april tag information
-            // TODO: specify object tag mapping
-            ph_.param<int>("object_id", object_id_, 11);
+            ph_.param<int>("object_id", object_id_, 0);
             object_tag_id_ = objects_[object_id_].begin()->second["tag_id"];
             ROS_INFO_STREAM("Looking for object " << object_id_ << " with tag " << object_tag_id_);
             //ph_.param<double>("timeout", timeout_, 10);
