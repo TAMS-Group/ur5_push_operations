@@ -39,6 +39,7 @@ namespace push_sampler
   {
     ros::NodeHandle pnh("~");
     pnh.param("min_table_distance", min_table_distance_, MIN_TABLE_DISTANCE);
+    pnh.param("max_table_distance", max_table_distance_, MAX_TABLE_DISTANCE);
     pnh.param("safety_range", safety_range_, SAFETY_RANGE);
     pnh.param("emergency_range", emergency_range_, EMERGENCY_RANGE);
     pnh.param("tip_length", tip_length_, TIP_LENGTH);
@@ -121,5 +122,7 @@ namespace push_sampler
     push.approach.point.z = std::max(min_table_distance_ - 0.5 * dim_z, 0.0);
     // 2. The box is too high for the tip and might touch the gripper
     push.approach.point.z = std::max(0.5 * dim_z - tip_length_, push.approach.point.z);
+    // 3. The box is too high and therefore the table distance too high
+    push.approach.point.z = std::min(max_table_distance_ - 0.5 * dim_z, push.approach.point.z);
   }
 }

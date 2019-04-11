@@ -39,7 +39,8 @@
 
 namespace push_sampler
 {
-  const float MIN_TABLE_DISTANCE = 0.02;
+  const double MIN_TABLE_DISTANCE = 0.02;
+  const double MAX_TABLE_DISTANCE = 0.2;
   const float TIP_LENGTH = 0.08;
 
   // Range to restrict the object on the table
@@ -63,7 +64,8 @@ namespace push_sampler
       float safety_range_;
       float emergency_range_;
 
-      float min_table_distance_;
+      double min_table_distance_;
+      double max_table_distance_;
       float tip_length_;
       float tip_radius_;
 
