@@ -1,7 +1,12 @@
 standalone_tags:
     [
     {id: 352, size: 0.127},
-    {id: 42, size: 0.1535}
+    {id: 42, size: 0.1535},
+    {id: 400, size: 0.04},
+    {id: 401, size: 0.048},
+    {id: 402, size: 0.08},
+    {id: 403, size: 0.056},
+    {id: 404, size: 0.048}
     ]
 tag_bundles:
     [

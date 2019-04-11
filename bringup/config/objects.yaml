@@ -1,30 +1,42 @@
 # Defenitions of training objects
 # object type is one of CUBE, SPHERE, CYLIINDER, MESH
 objects:
-  #- object:
-  #    type: CUBE
-  #    tag_id: 331
-  #    tag_offset: {x: 0.0, y: 0.0, z: 0.025}
-  #    scale: {x: 0.05, y: 0.1, z: 0.05}
-  #    tags: [11, 12, 13]
+# simple cardboard box
   - object:
       type: CUBE
       tag_id: 352
       tag_offset: {x: 0.0, y: 0.0, z: 0.056}
       scale: {x: 0.162, y: 0.23, z: 0.112}
-      tags: [11, 12, 13]
+#  # hammer
+#  - object:
+#      type: CUBE
+#      tag_id: 400
+#      tag_offset: {x: 0.0, y: 0.0, z: 0.014}
+#      scale: {x: 0.05, y: 0.05, z: 0.05}
+#  # blue can 'Maxwell House'
+#  - object:
+#      type: CUBE
+#      tag_id: 401
+#      tag_offset: {x: 0.0, y: 0.0, z: 0.07}
+#      scale: {x: 0.105, y: 0.105, z: 0.14}
+  # pan
   - object:
-      type: SPHERE
-      tag_id: 202
-      tag_offset: {x: 0.0, y: 0.0, z: 0.0}
-      scale: {x: 0.1, y: 0.1, z: 0.1}
-      tags: [21, 22, 23]
+      type: CUBE
+      tag_id: 402
+      tag_offset: {x: 0.0, y: -0.105, z: 0.0525}
+      scale: {x: 0.26, y: 0.47, z: 0.105}
+  # bottle 'soft scrub'
   - object:
-      type: CYLINDER
-      tag_id: 203
+      type: CUBE
+      tag_id: 403
+      tag_offset: {x: 0.0, y: 0.0, z: 0.034}
+      scale: {x: 0.07, y: 0.07, z: 0.07}
+  # nylon spring clamp
+  - object:
+      type: CUBE
+      tag_id: 404
       tag_offset: {x: 0.0, y: 0.0, z: 0.0}
-      scale: {x: 0.1, y: 0.1, z: 0.1}
-      tags: [31, 32, 33]
+      scale: {x: 0.06, y: 0.06, z: 0.06}
 #  - object:
 #      type: MESH
 #      mesh: '<path_to_mesh>'
