@@ -421,16 +421,17 @@ namespace push_execution
             {
                 std_msgs::Header obj_header;
                 obj_header.frame_id = frame_id;
-                obj_header.stamp = ros::Time::now();
                 return getObjectPose(obj_header, target_frame);
             }
 
             geometry_msgs::Pose getObjectPose(const std_msgs::Header& obj_pose_header, const std::string& target_frame="table_top")
             {
+                ros::Time now = ros::Time::now();
                 geometry_msgs::PoseStamped obj_pose;
                 obj_pose.header = obj_pose_header;
+                obj_pose.header.stamp = now;
                 obj_pose.pose.orientation.w = 1.0;
-                tf_listener_.waitForTransform(target_frame, obj_pose.header.frame_id, obj_pose.header.stamp, ros::Duration(1.0));
+                tf_listener_.waitForTransform(target_frame, obj_pose.header.frame_id, now, ros::Duration(1.0));
                 tf_listener_.transformPose(target_frame, obj_pose, obj_pose);
                 return obj_pose.pose;
             }
