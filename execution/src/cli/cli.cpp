@@ -78,8 +78,8 @@ int main(int argc, char** argv) {
 
   std::string input;
 
-  while(ros::ok()) {
-    std::cout << std::endl << ">";
+  while(ros::ok() && !std::cin.eof()) {
+    std::cout << std::endl << "> ";
 
     // Display prompt and read input (NB: input must be freed after use)...
     std::getline(std::cin, input);
@@ -147,7 +147,7 @@ int main(int argc, char** argv) {
       op.setExecute(true);
     } else if (input == COMMAND_UNSET + " " + FLAG_EXECUTE){
       op.setExecute(true);
-    } else if (input == COMMAND_QUIT){
+    } else if (input == COMMAND_QUIT || std::cin.eof()){
       std::cout << "Bye!" << std::endl;
       break;
     } else {
