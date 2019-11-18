@@ -1,0 +1,10 @@
+roslaunch tams_ur5_push_bringup bringup.launch
+rosrun tams_ur5_push_execution cli
+
+-> cli: 
+1. maintenance
+2. open
+3. <insert pusher>
+4. close
+5. attach
+6. push nonstop
