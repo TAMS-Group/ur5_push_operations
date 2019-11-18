@@ -147,10 +147,10 @@ class PushExecutionServer {
             explore_pushes_server_.publishFeedback(feedback);
             success_count++;
             failed_in_a_row = 0;
-          } else if(failed_in_a_row++ == 10) {
-            ROS_ERROR("Pusher goal action aborted after 10 failed attempts in a row!");
-            success = false;
-            break;
+          //} else if(failed_in_a_row++ == 10) {
+          //  ROS_ERROR("Pusher goal action aborted after 10 failed attempts in a row!");
+          //  success = false;
+          //  break;
           }
         }
       } else {
