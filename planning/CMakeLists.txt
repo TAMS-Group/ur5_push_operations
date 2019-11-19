@@ -29,10 +29,10 @@ catkin_package(
     )
 
 include_directories(
-    ${EIGEN__INCLUDE_DIRS}
-    ${OMPL_INCLUDE_DIRS}
-    ${catkin_INCLUDE_DIRS}
     include
+    ${catkin_INCLUDE_DIRS}
+    ${EIGEN3_INCLUDE_DIRS}
+    ${OMPL_INCLUDE_DIRS}
     )
 
 add_executable(push_planner_node src/push_planner_node.cpp)
