@@ -280,7 +280,7 @@ class PushOperations
       pose.position.x = 0.2 - 0.0305;
       pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(0.0, -0.5*M_PI, 0.0);
 
-      Eigen::Affine3d transform;
+      Eigen::Isometry3d transform;
       tf::poseMsgToEigen(pose, transform);
 
       arm_.setTouchLinks(gripper_.getLinkNames());

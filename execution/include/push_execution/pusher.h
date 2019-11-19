@@ -67,7 +67,7 @@ namespace push_execution
 
       std::string mesh_resource_;
       float mesh_scale_;
-      Eigen::Affine3d tip_transform_;
+      Eigen::Isometry3d tip_transform_;
       moveit_msgs::AttachedCollisionObject pusher_object_;
       std::string parent_link_;
       std::string pusher_id_;
@@ -87,11 +87,11 @@ namespace push_execution
     public:
       Pusher(const std::string& group_name);
 
-      Pusher(const std::string& group_name, const std::string& resource, const Eigen::Affine3d& transform, const std::string& parent_link, const std::string& pusher_id);
+      Pusher(const std::string& group_name, const std::string& resource, const Eigen::Isometry3d& transform, const std::string& parent_link, const std::string& pusher_id);
 
       void setPusherMeshResource(const std::string& resource, float scale=0.001);
 
-      void setPusherTipTransform(const Eigen::Affine3d transform);
+      void setPusherTipTransform(const Eigen::Isometry3d transform);
 
       void setPusherParentLink(const std::string& parent_link);
 
@@ -99,7 +99,7 @@ namespace push_execution
 
       void setTouchLinks(const std::vector<std::string>& touch_links);
 
-      bool loadPusher(const std::string& resource, const Eigen::Affine3d& transform, const std::string& parent_link, const std::string& pusher_id);
+      bool loadPusher(const std::string& resource, const Eigen::Isometry3d& transform, const std::string& parent_link, const std::string& pusher_id);
 
       bool loadFromAttachedObject();
 
@@ -113,13 +113,13 @@ namespace push_execution
 
       bool setPusherPoseTarget(const geometry_msgs::Pose& pose);
 
-      bool setPusherPoseTarget(const Eigen::Affine3d& pose);
+      bool setPusherPoseTarget(const Eigen::Isometry3d& pose);
 
       bool setPusherJointValueTarget(const geometry_msgs::PoseStamped& pose_stamped);
 
       bool setPusherJointValueTarget(const geometry_msgs::Pose& pose);
 
-      bool setPusherJointValueTarget(const Eigen::Affine3d& pose);
+      bool setPusherJointValueTarget(const Eigen::Isometry3d& pose);
 
       double computeCartesianPushPath(std::vector<geometry_msgs::Pose>& waypoints, double eef_step, double jump_threshold, moveit_msgs::RobotTrajectory& trajectory);
   };

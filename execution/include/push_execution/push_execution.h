@@ -450,9 +450,9 @@ namespace push_execution
                 return pose;
             }
 
-            Eigen::Affine3d getObjectTransform(const std::string& obj_frame, const std::string& target_frame="table_top")
+            Eigen::Isometry3d getObjectTransform(const std::string& obj_frame, const std::string& target_frame="table_top")
             {
-                Eigen::Affine3d obj_pose_affine;
+                Eigen::Isometry3d obj_pose_affine;
                 std_msgs::Header obj_header;
                 obj_header.frame_id = obj_frame;
                 obj_header.stamp = ros::Time::now();
@@ -626,9 +626,9 @@ namespace push_execution
                 arrow_offset.orientation.w = 1;
                 arrow_offset.position.x = -arrow_len;
 
-                Eigen::Affine3d offset_affine;
-                Eigen::Affine3d direction_affine;
-                Eigen::Affine3d pose_affine;
+                Eigen::Isometry3d offset_affine;
+                Eigen::Isometry3d direction_affine;
+                Eigen::Isometry3d pose_affine;
                 tf::poseMsgToEigen(arrow_offset, offset_affine);
                 tf::poseMsgToEigen(push_direction, direction_affine);
                 tf::poseMsgToEigen(pose, pose_affine);
@@ -652,14 +652,14 @@ namespace push_execution
                 obj_pose.header.frame_id = push.approach.frame_id;
                 obj_pose.pose.orientation.w = 1.0;
                 tf_listener_.transformPose("table_top", obj_pose, obj_pose);
-                Eigen::Affine3d obj_pose_affine;
+                Eigen::Isometry3d obj_pose_affine;
                 tf::poseMsgToEigen(obj_pose.pose, obj_pose_affine);
 
                 // push direction
-                Eigen::Affine3d direction(Eigen::AngleAxis<double>(push.approach.angle, Eigen::Vector3d::UnitZ()));
+                Eigen::Isometry3d direction(Eigen::AngleAxis<double>(push.approach.angle, Eigen::Vector3d::UnitZ()));
 
                 // approach point
-                Eigen::Affine3d approach_affine(Eigen::Affine3d::Identity());
+                Eigen::Isometry3d approach_affine(Eigen::Isometry3d::Identity());
                 geometry_msgs::Pose pose;
                 pose.position = push.approach.point;
 
@@ -678,7 +678,7 @@ namespace push_execution
                 geometry_msgs::Quaternion orientation;
                 orientation.w = 1.0;
 
-                Eigen::Affine3d wp(Eigen::Affine3d::Identity()); // instantiate as identity transform!!!
+                Eigen::Isometry3d wp(Eigen::Isometry3d::Identity()); // instantiate as identity transform!!!
                 wp.translate(Eigen::Vector3d(-approach_distance, 0.0, 0.0));
                 tf::poseEigenToMsg(approach_affine * wp, start_wp);
                 start_wp.orientation = orientation;

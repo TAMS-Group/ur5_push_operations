@@ -75,7 +75,7 @@ namespace push_execution
 
     Pusher::Pusher(const std::string& group_name) : moveit::planning_interface::MoveGroupInterface(group_name) {}
 
-    Pusher::Pusher(const std::string& group_name, const std::string& resource, const Eigen::Affine3d& transform, const std::string& parent_link, const std::string& pusher_id) : moveit::planning_interface::MoveGroupInterface(group_name) {
+    Pusher::Pusher(const std::string& group_name, const std::string& resource, const Eigen::Isometry3d& transform, const std::string& parent_link, const std::string& pusher_id) : moveit::planning_interface::MoveGroupInterface(group_name) {
         loadPusher(resource, transform, parent_link, pusher_id);
     }
 
@@ -85,7 +85,7 @@ namespace push_execution
         mesh_scale_ = scale;
     }
 
-    void Pusher::setPusherTipTransform(const Eigen::Affine3d transform)
+    void Pusher::setPusherTipTransform(const Eigen::Isometry3d transform)
     {
         tip_transform_ = transform;
     }
@@ -105,7 +105,7 @@ namespace push_execution
         touch_links_ = touch_links;
     }
 
-    bool Pusher::loadPusher(const std::string& resource, const Eigen::Affine3d& transform, const std::string& parent_link, const std::string& pusher_id)
+    bool Pusher::loadPusher(const std::string& resource, const Eigen::Isometry3d& transform, const std::string& parent_link, const std::string& pusher_id)
     {
 	    setPusherMeshResource(resource);
 	    setPusherTipTransform(transform);
@@ -218,12 +218,12 @@ namespace push_execution
     }
 
     bool Pusher::setPusherPoseTarget(const geometry_msgs::Pose& pose) {
-	    Eigen::Affine3d pose_affine;
+	    Eigen::Isometry3d pose_affine;
 	    tf::poseMsgToEigen(pose, pose_affine);
 	    return setPusherPoseTarget(pose_affine);
     }
 
-    bool Pusher::setPusherPoseTarget(const Eigen::Affine3d& pose) {
+    bool Pusher::setPusherPoseTarget(const Eigen::Isometry3d& pose) {
 	    if(isPusherAttached()) {
 		    return setPoseTarget(pose * tip_transform_.inverse());
 	    } else {
@@ -237,12 +237,12 @@ namespace push_execution
     }
 
     bool Pusher::setPusherJointValueTarget(const geometry_msgs::Pose& pose) {
-	    Eigen::Affine3d pose_affine;
+	    Eigen::Isometry3d pose_affine;
 	    tf::poseMsgToEigen(pose, pose_affine);
 	    return setPusherJointValueTarget(pose_affine);
     }
 
-    bool Pusher::setPusherJointValueTarget(const Eigen::Affine3d& pose) {
+    bool Pusher::setPusherJointValueTarget(const Eigen::Isometry3d& pose) {
 	    if(isPusherAttached()) {
 		    return setJointValueTarget(pose * tip_transform_.inverse());
 	    } else {
@@ -254,7 +254,7 @@ namespace push_execution
     double Pusher::computeCartesianPushPath(std::vector<geometry_msgs::Pose>& waypoints, double eef_step, double jump_threshold, moveit_msgs::RobotTrajectory& trajectory) {
 	    if(isPusherAttached()) {
 		    std::vector<geometry_msgs::Pose> transformed_waypoints;
-		    Eigen::Affine3d affine;
+		    Eigen::Isometry3d affine;
 		    for(geometry_msgs::Pose wp : waypoints) {
 			    tf::poseMsgToEigen(wp, affine);
 			    geometry_msgs::Pose transformed_wp;
